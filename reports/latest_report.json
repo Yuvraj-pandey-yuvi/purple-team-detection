@@ -1,0 +1,215 @@
+{
+  "generated_at": "2026-05-24T09:08:22.649903+00:00",
+  "summary": {
+    "total_techniques": 5,
+    "detected": 4,
+    "missed": 1,
+    "coverage_percent": 80.0,
+    "total_alerts": 5,
+    "severity_counts": {
+      "CRITICAL": 4,
+      "HIGH": 1,
+      "MEDIUM": 0
+    },
+    "source_counts": {
+      "auth.log": 2,
+      "auditd": 3
+    }
+  },
+  "techniques": {
+    "T1110.001": {
+      "name": "Brute Force - Password Guessing",
+      "detected": true,
+      "status": "detected",
+      "alert_count": 1
+    },
+    "T1078": {
+      "name": "Valid Accounts - Console Login",
+      "detected": false,
+      "status": "missed",
+      "alert_count": 0
+    },
+    "T1136.001": {
+      "name": "Create Local Account",
+      "detected": true,
+      "status": "detected",
+      "alert_count": 1
+    },
+    "T1003.008": {
+      "name": "OS Credential Dumping",
+      "detected": true,
+      "status": "detected",
+      "alert_count": 1
+    },
+    "T1053.003": {
+      "name": "Scheduled Task - Cron",
+      "detected": true,
+      "status": "detected",
+      "alert_count": 1
+    }
+  },
+  "attacker_ips": [
+    {
+      "ip": "178.175.167.68",
+      "attempts": 26,
+      "attack_speed": "aggressive",
+      "first_seen": "2026-05-24T04:14:41",
+      "last_seen": "2026-05-24T04:15:40",
+      "time_window": 59
+    }
+  ],
+  "alerts": [
+    {
+      "rule_id": "RULE-003",
+      "rule_name": "New Local User Account Created",
+      "technique": "T1136.001",
+      "severity": "CRITICAL",
+      "log_source": "auth.log",
+      "new_username": "test",
+      "uid": 1003,
+      "gid": "1003",
+      "created_by": "unknown",
+      "timestamp": "2026-05-24T05:50:06",
+      "name_suspicious": true,
+      "reason": "New user 'test' (UID 1003) created by 'unknown' at 2026-05-24T05:50:06"
+    },
+    {
+      "rule_id": "RULE-004",
+      "rule_name": "Credential Dump via /etc/shadow",
+      "technique": "T1003.008",
+      "severity": "CRITICAL",
+      "log_source": "auditd",
+      "comm": "cat",
+      "exe": "/usr/lib/cargo/bin/coreutils/cat",
+      "pid": "37908",
+      "ppid": "37907",
+      "auid": "1000",
+      "auid_human": "ubuntu",
+      "uid": "0",
+      "euid": "0",
+      "tty": "pts4",
+      "success": "yes",
+      "privilege_escalated": true,
+      "timestamp": "2026-05-24T06:26:19Z",
+      "reason": "Process 'cat' accessed /etc/shadow as ubuntu (euid=0) [PRIVILEGE ESCALATED]"
+    },
+    {
+      "rule_id": "RULE-004c",
+      "rule_name": "Process Masquerading Detected",
+      "technique": "T1036",
+      "severity": "CRITICAL",
+      "log_source": "auditd",
+      "comm": "unix_chkpwd",
+      "exe": "/tmp/unix_chkpwd",
+      "pid": "39672",
+      "ppid": "39671",
+      "auid": "1000",
+      "auid_human": "ubuntu",
+      "uid": "0",
+      "euid": "0",
+      "tty": "pts5",
+      "success": "yes",
+      "privilege_escalated": true,
+      "timestamp": "2026-05-24T07:35:27Z",
+      "reason": "Process named 'unix_chkpwd' running from '/tmp/unix_chkpwd' instead of expected '/usr/sbin/unix_chkpwd' \u2014 possible masquerading attack (T1036)",
+      "expected_exe": "/usr/sbin/unix_chkpwd",
+      "actual_exe": "/tmp/unix_chkpwd"
+    },
+    {
+      "rule_id": "RULE-005",
+      "rule_name": "Cron Job Created",
+      "technique": "T1053.003",
+      "severity": "CRITICAL",
+      "log_source": "auditd",
+      "cron_file": "atomic_test",
+      "cron_file_path": "/etc/cron.d/atomic_test",
+      "comm": "tee",
+      "exe": "/usr/lib/cargo/bin/coreutils/tee",
+      "pid": "37935",
+      "ppid": "37934",
+      "auid": "1000",
+      "auid_human": "ubuntu",
+      "uid": "0",
+      "euid": "0",
+      "tty": "pts4",
+      "success": "yes",
+      "privilege_escalated": true,
+      "name_suspicious": true,
+      "timestamp": "2026-05-24T06:26:39Z",
+      "reason": "Cron job 'atomic_test' created at '/etc/cron.d/atomic_test' by ubuntu via 'tee' [PRIVILEGE ESCALATED][SUSPICIOUS NAME]"
+    },
+    {
+      "rule_id": "RULE-001",
+      "rule_name": "SSH Brute Force Detected",
+      "technique": "T1110.001",
+      "severity": "HIGH",
+      "source_ip": "178.175.167.68",
+      "attempts": 26,
+      "threshold": 5,
+      "first_seen": "2026-05-24T04:14:41",
+      "last_seen": "2026-05-24T04:15:40",
+      "time_window_seconds": 59,
+      "attack_speed": "aggressive",
+      "log_source": "auth.log",
+      "reason": "IP 178.175.167.68 made 26 failed SSH attempts over 59s (aggressive)",
+      "sample_logs": [
+        "2026-05-24T04:14:41.705466+00:00 ip-172-31-38-66 sshd-session[35250]: Invalid user admin from 178.175.167.68 port 44122",
+        "2026-05-24T04:14:43.924181+00:00 ip-172-31-38-66 sshd-session[35252]: Invalid user admin from 178.175.167.68 port 44284",
+        "2026-05-24T04:14:46.386424+00:00 ip-172-31-38-66 sshd-session[35254]: Invalid user admin from 178.175.167.68 port 44430"
+      ]
+    }
+  ],
+  "user_activity": {
+    "auid_alert_counts": {
+      "ubuntu": 3
+    },
+    "account_creators": {
+      "unknown": [
+        "test"
+      ]
+    },
+    "privilege_escalations": [
+      {
+        "auid_human": "ubuntu",
+        "auid": "1000",
+        "euid": "0",
+        "technique": "T1003.008",
+        "comm": "cat",
+        "timestamp": "2026-05-24T06:26:19Z"
+      },
+      {
+        "auid_human": "ubuntu",
+        "auid": "1000",
+        "euid": "0",
+        "technique": "T1036",
+        "comm": "unix_chkpwd",
+        "timestamp": "2026-05-24T07:35:27Z"
+      },
+      {
+        "auid_human": "ubuntu",
+        "auid": "1000",
+        "euid": "0",
+        "technique": "T1053.003",
+        "comm": "tee",
+        "timestamp": "2026-05-24T06:26:39Z"
+      }
+    ],
+    "user_technique_map": {
+      "ubuntu": [
+        "T1003.008",
+        "T1036",
+        "T1053.003"
+      ]
+    },
+    "ssh_attackers": {
+      "178.175.167.68": {
+        "attempts": 26,
+        "attack_speed": "aggressive",
+        "first_seen": "2026-05-24T04:14:41",
+        "last_seen": "2026-05-24T04:15:40",
+        "time_window": 59,
+        "geo": null
+      }
+    }
+  }
+}

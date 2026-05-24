@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Purple Team Detection Dashboard</title>
+
+    <!-- Leaflet for map -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+    <!-- Chart.js for graphs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0d1117;
+            color: #c9d1d9;
+            min-height: 100vh;
+        }
+
+        /* ── HEADER ── */
+        .header {
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            color: #58a6ff;
+            font-size: 18px;
+            letter-spacing: 2px;
+        }
+        .header .meta {
+            font-size: 11px;
+            color: #8b949e;
+        }
+        .refresh-btn {
+            background: #238636;
+            color: white;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .refresh-btn:hover { background: #2ea043; }
+
+        /* ── LAYOUT ── */
+        .container { padding: 20px 24px; }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .grid-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .full-width { margin-bottom: 16px; }
+
+        /* ── CARDS ── */
+        .card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 16px;
+        }
+        .card h2 {
+            font-size: 12px;
+            color: #8b949e;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+            border-bottom: 1px solid #21262d;
+            padding-bottom: 8px;
+        }
+
+        /* ── STAT BOXES ── */
+        .stat-box {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+        .stat-box .number {
+            font-size: 36px;
+            font-weight: bold;
+            line-height: 1;
+        }
+        .stat-box .label {
+            font-size: 11px;
+            color: #8b949e;
+            margin-top: 6px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .stat-box.coverage .number { color: #58a6ff; }
+        .stat-box.critical  .number { color: #da3633; }
+        .stat-box.high      .number { color: #e3b341; }
+        .stat-box.detected  .number { color: #238636; }
+
+        /* ── COVERAGE BAR ── */
+        .coverage-bar-wrap {
+            background: #21262d;
+            border-radius: 4px;
+            height: 8px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+        .coverage-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #238636, #58a6ff);
+            border-radius: 4px;
+            transition: width 1s ease;
+        }
+
+        /* ── ATT&CK MATRIX ── */
+        .matrix-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 8px;
+        }
+        .technique-cell {
+            padding: 10px 12px;
+            border-radius: 6px;
+            border: 1px solid #30363d;
+            cursor: default;
+        }
+        .technique-cell.detected {
+            background: #0f2f0f;
+            border-color: #238636;
+        }
+        .technique-cell.missed {
+            background: #2f0f0f;
+            border-color: #da3633;
+        }
+        .technique-cell .tid {
+            font-size: 10px;
+            color: #8b949e;
+        }
+        .technique-cell .tname {
+            font-size: 12px;
+            margin-top: 3px;
+        }
+        .technique-cell .tstatus {
+            font-size: 11px;
+            margin-top: 5px;
+        }
+
+        /* ── ALERTS TABLE ── */
+        .alert-item {
+            padding: 10px 12px;
+            border-left: 3px solid #30363d;
+            margin-bottom: 8px;
+            background: #0d1117;
+            border-radius: 0 4px 4px 0;
+        }
+        .alert-item.CRITICAL { border-left-color: #da3633; }
+        .alert-item.HIGH     { border-left-color: #e3b341; }
+        .alert-item.MEDIUM   { border-left-color: #58a6ff; }
+
+        .alert-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+        .alert-title { font-size: 13px; font-weight: bold; }
+        .severity-badge {
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: bold;
+        }
+        .badge-CRITICAL { background: #da3633; color: white; }
+        .badge-HIGH     { background: #e3b341; color: black; }
+        .badge-MEDIUM   { background: #58a6ff; color: black; }
+
+        .alert-meta {
+            font-size: 11px;
+            color: #8b949e;
+            margin-bottom: 3px;
+        }
+        .alert-reason { font-size: 12px; color: #c9d1d9; }
+
+        .alert-details {
+            display: flex;
+            gap: 12px;
+            margin-top: 6px;
+            flex-wrap: wrap;
+        }
+        .detail-pill {
+            font-size: 10px;
+            background: #21262d;
+            padding: 2px 8px;
+            border-radius: 10px;
+            color: #8b949e;
+        }
+        .detail-pill span { color: #c9d1d9; }
+
+        /* ── MAP ── */
+        #attack-map {
+            height: 300px;
+            border-radius: 6px;
+            border: 1px solid #30363d;
+        }
+
+        /* ── PRIVILEGE ESCALATION LIST ── */
+        .privesc-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #21262d;
+            font-size: 12px;
+        }
+        .privesc-item:last-child { border-bottom: none; }
+
+        /* ── LOADING ── */
+        .loading {
+            color: #8b949e;
+            font-size: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        /* ── GENERATED TIME ── */
+        .generated-time {
+            font-size: 11px;
+            color: #8b949e;
+            text-align: right;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>🎯 PURPLE TEAM DETECTION DASHBOARD</h1>
+    <div style="display:flex; align-items:center; gap:16px;">
+        <div class="meta" id="generated-time">Loading...</div>
+        <button class="refresh-btn" onclick="refreshReport()">
+            ↻ Refresh
+        </button>
+    </div>
+</div>
+
+<div class="container">
+
+    <!-- ROW 1: STAT BOXES -->
+    <div class="grid-3" id="stat-boxes">
+        <div class="stat-box coverage">
+            <div class="number" id="stat-coverage">--</div>
+            <div class="label">Detection Coverage</div>
+            <div class="coverage-bar-wrap">
+                <div class="coverage-bar-fill" id="coverage-bar"
+                     style="width:0%"></div>
+            </div>
+        </div>
+        <div class="stat-box critical">
+            <div class="number" id="stat-critical">--</div>
+            <div class="label">Critical Alerts</div>
+        </div>
+        <div class="stat-box high">
+            <div class="number" id="stat-high">--</div>
+            <div class="label">High Alerts</div>
+        </div>
+    </div>
+
+    <!-- ROW 2: ATT&CK MATRIX -->
+    <div class="card full-width">
+        <h2>ATT&CK Coverage Matrix</h2>
+        <div class="matrix-grid" id="matrix">
+            <div class="loading">Loading techniques...</div>
+        </div>
+    </div>
+
+    <!-- ROW 3: CHARTS -->
+    <div class="grid-2">
+        <div class="card">
+            <h2>Alerts by Technique</h2>
+            <canvas id="technique-chart" height="200"></canvas>
+        </div>
+        <div class="card">
+            <h2>Alerts by User Account (auid)</h2>
+            <canvas id="user-chart" height="200"></canvas>
+        </div>
+    </div>
+
+    <!-- ROW 4: MAP + PRIVILEGE ESCALATIONS -->
+    <div class="grid-2">
+        <div class="card">
+            <h2>SSH Attacker Origins</h2>
+            <div id="attack-map"></div>
+            <div id="map-legend" style="margin-top:8px;font-size:11px;
+                 color:#8b949e;"></div>
+        </div>
+        <div class="card">
+            <h2>Privilege Escalations</h2>
+            <div id="privesc-list">
+                <div class="loading">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ROW 5: ALERTS -->
+    <div class="card full-width">
+        <h2>Active Alerts</h2>
+        <div id="alerts-list">
+            <div class="loading">Loading alerts...</div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+const API = '';  // same origin - FastAPI serves this file
+
+// ── MAP SETUP ────────────────────────────────────────────
+const map = L.map('attack-map', {
+    center: [20, 0],
+    zoom: 2,
+    zoomControl: true,
+});
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap © CARTO',
+    maxZoom: 18,
+}).addTo(map);
+
+
+// ── CHARTS ───────────────────────────────────────────────
+let techniqueChart = null;
+let userChart      = null;
+
+function createTechniqueChart(techniques) {
+    const labels = [];
+    const counts = [];
+    const colors = [];
+
+    for (const [tid, data] of Object.entries(techniques)) {
+        labels.push(tid);
+        counts.push(data.alert_count);
+        colors.push(data.detected ? '#238636' : '#da3633');
+    }
+
+    const ctx = document.getElementById('technique-chart').getContext('2d');
+    if (techniqueChart) techniqueChart.destroy();
+    techniqueChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Alerts',
+                data: counts,
+                backgroundColor: colors,
+                borderColor: colors,
+                borderWidth: 1,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+            },
+            scales: {
+                x: {
+                    ticks: { color: '#8b949e', font: { size: 10 } },
+                    grid:  { color: '#21262d' },
+                },
+                y: {
+                    ticks: {
+                        color: '#8b949e',
+                        stepSize: 1,
+                    },
+                    grid: { color: '#21262d' },
+                    beginAtZero: true,
+                }
+            }
+        }
+    });
+}
+
+function createUserChart(auidCounts) {
+    const labels = Object.keys(auidCounts);
+    const counts = Object.values(auidCounts);
+
+    const ctx = document.getElementById('user-chart').getContext('2d');
+    if (userChart) userChart.destroy();
+    userChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Alerts Generated',
+                data: counts,
+                backgroundColor: '#e3b341',
+                borderColor: '#e3b341',
+                borderWidth: 1,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+            },
+            scales: {
+                x: {
+                    ticks: { color: '#8b949e' },
+                    grid:  { color: '#21262d' },
+                },
+                y: {
+                    ticks: {
+                        color: '#8b949e',
+                        stepSize: 1,
+                    },
+                    grid: { color: '#21262d' },
+                    beginAtZero: true,
+                }
+            }
+        }
+    });
+}
+
+
+// ── GEOLOCATION ──────────────────────────────────────────
+async function geolocateIP(ip) {
+    try {
+        const res  = await fetch(`http://ip-api.com/json/${ip}`);
+        const data = await res.json();
+        if (data.status === 'success') {
+            return {
+                lat:     data.lat,
+                lon:     data.lon,
+                city:    data.city,
+                country: data.country,
+                isp:     data.isp,
+            };
+        }
+    } catch (e) {
+        console.warn('Geolocation failed for', ip);
+    }
+    return null;
+}
+
+// Track map markers to avoid duplicates
+const mapMarkers = {};
+
+async function updateMap(attackers) {
+    const legendEl = document.getElementById('map-legend');
+    const legendItems = [];
+
+    for (const [ip, data] of Object.entries(attackers)) {
+        const geo = await geolocateIP(ip);
+        if (!geo) continue;
+
+        // Remove old marker if exists
+        if (mapMarkers[ip]) {
+            map.removeLayer(mapMarkers[ip]);
+        }
+
+        // Size marker by attempt count
+        const radius = Math.min(8 + data.attempts / 5, 25);
+
+        // Color by attack speed
+        const color = data.attack_speed === 'aggressive'
+            ? '#da3633'
+            : data.attack_speed === 'moderate'
+            ? '#e3b341'
+            : '#58a6ff';
+
+        const marker = L.circleMarker([geo.lat, geo.lon], {
+            radius,
+            fillColor:   color,
+            color:       color,
+            weight:      1,
+            opacity:     0.9,
+            fillOpacity: 0.7,
+        }).addTo(map);
+
+        marker.bindPopup(`
+            <div style="font-family:monospace;font-size:12px;
+                        background:#161b22;color:#c9d1d9;
+                        padding:8px;border-radius:4px;">
+                <strong style="color:#da3633;">${ip}</strong><br>
+                📍 ${geo.city}, ${geo.country}<br>
+                🔁 ${data.attempts} attempts<br>
+                ⚡ ${data.attack_speed}<br>
+                🕐 ${data.first_seen}<br>
+                🌐 ${geo.isp}
+            </div>
+        `);
+
+        mapMarkers[ip] = marker;
+
+        legendItems.push(
+            `<span style="color:${color}">●</span> 
+             ${ip} — ${geo.city}, ${geo.country} 
+             (${data.attempts} attempts, ${data.attack_speed})`
+        );
+    }
+
+    legendEl.innerHTML = legendItems.join('<br>');
+}
+
+
+// ── RENDER FUNCTIONS ─────────────────────────────────────
+
+function renderSummary(summary) {
+    const pct = summary.coverage_percent;
+    document.getElementById('stat-coverage').textContent = pct + '%';
+    document.getElementById('coverage-bar').style.width  = pct + '%';
+    document.getElementById('stat-critical').textContent =
+        summary.severity_counts.CRITICAL || 0;
+    document.getElementById('stat-high').textContent =
+        summary.severity_counts.HIGH || 0;
+}
+
+function renderMatrix(techniques) {
+    const el = document.getElementById('matrix');
+    el.innerHTML = '';
+
+    for (const [tid, data] of Object.entries(techniques)) {
+        const cls  = data.detected ? 'detected' : 'missed';
+        const icon = data.detected ? '✅' : '❌';
+        const cell = document.createElement('div');
+        cell.className = `technique-cell ${cls}`;
+        cell.innerHTML = `
+            <div class="tid">${tid}</div>
+            <div class="tname">${data.name}</div>
+            <div class="tstatus">${icon} ${data.status}
+                ${data.alert_count > 0
+                    ? `<span style="color:#8b949e">
+                        (${data.alert_count})</span>`
+                    : ''}
+            </div>
+        `;
+        el.appendChild(cell);
+    }
+}
+
+function renderAlerts(alerts) {
+    const el = document.getElementById('alerts-list');
+    if (!alerts.length) {
+        el.innerHTML = '<div class="loading">No alerts.</div>';
+        return;
+    }
+
+    el.innerHTML = alerts.map(a => {
+        const sev = a.severity || 'MEDIUM';
+
+        // Build detail pills based on available fields
+        const pills = [];
+        if (a.source_ip)    pills.push(`IP: <span>${a.source_ip}</span>`);
+        if (a.auid_human)   pills.push(`User: <span>${a.auid_human}</span>`);
+        if (a.comm)         pills.push(`Process: <span>${a.comm}</span>`);
+        if (a.attempts)     pills.push(`Attempts: <span>${a.attempts}</span>`);
+        if (a.attack_speed) pills.push(`Speed: <span>${a.attack_speed}</span>`);
+        if (a.cron_file)    pills.push(`File: <span>${a.cron_file}</span>`);
+        if (a.new_username) pills.push(`NewUser: <span>${a.new_username}</span>`);
+        if (a.created_by && a.created_by !== 'unknown')
+            pills.push(`CreatedBy: <span>${a.created_by}</span>`);
+        if (a.privilege_escalated)
+            pills.push(`<span style="color:#da3633">⚠ PRIV ESC</span>`);
+        if (a.name_suspicious)
+            pills.push(`<span style="color:#e3b341">⚠ SUSPICIOUS NAME</span>`);
+        if (a.timestamp)    pills.push(`Time: <span>${a.timestamp}</span>`);
+
+        return `
+        <div class="alert-item ${sev}">
+            <div class="alert-header">
+                <div class="alert-title">${a.rule_name}</div>
+                <span class="severity-badge badge-${sev}">${sev}</span>
+            </div>
+            <div class="alert-meta">
+                ${a.technique} | ${a.log_source}
+            </div>
+            <div class="alert-reason">${a.reason}</div>
+            ${pills.length ? `
+            <div class="alert-details">
+                ${pills.map(p =>
+                    `<span class="detail-pill">${p}</span>`
+                ).join('')}
+            </div>` : ''}
+        </div>`;
+    }).join('');
+}
+
+function renderPrivEsc(escalations) {
+    const el = document.getElementById('privesc-list');
+    if (!escalations.length) {
+        el.innerHTML = '<div class="loading">No escalations detected.</div>';
+        return;
+    }
+
+    el.innerHTML = escalations.map(e => `
+        <div class="privesc-item">
+            <div>
+                <span style="color:#e3b341">${e.auid_human}</span>
+                → <span style="color:#da3633">root</span>
+                via <code>${e.comm}</code>
+            </div>
+            <div style="color:#8b949e;font-size:11px;">
+                ${e.technique}<br>${e.timestamp}
+            </div>
+        </div>
+    `).join('');
+}
+
+
+// ── MAIN LOAD ────────────────────────────────────────────
+
+async function loadDashboard() {
+    try {
+        const [reportRes, alertsRes, activityRes] = await Promise.all([
+            fetch(`${API}/report`),
+            fetch(`${API}/alerts`),
+            fetch(`${API}/user-activity`),
+        ]);
+
+        const report   = await reportRes.json();
+        const alerts   = await alertsRes.json();
+        const activity = await activityRes.json();
+
+        // Generated time
+        document.getElementById('generated-time').textContent =
+            'Updated: ' + new Date(
+                report.generated_at
+            ).toLocaleTimeString();
+
+        // Render all sections
+        renderSummary(report.summary);
+        renderMatrix(report.techniques);
+        renderAlerts(alerts);
+        renderPrivEsc(activity.privilege_escalations || []);
+
+        // Charts
+        createTechniqueChart(report.techniques);
+        createUserChart(activity.auid_alert_counts || {});
+
+        // Map - geolocate attackers
+        await updateMap(activity.ssh_attackers || {});
+
+    } catch (err) {
+        console.error('Dashboard load error:', err);
+    }
+}
+
+async function refreshReport() {
+    const btn = document.querySelector('.refresh-btn');
+    btn.textContent = '↻ Refreshing...';
+    btn.disabled    = true;
+
+    try {
+        await fetch(`${API}/refresh`, { method: 'POST' });
+        await loadDashboard();
+    } catch (e) {
+        console.error('Refresh failed:', e);
+    }
+
+    btn.textContent = '↻ Refresh';
+    btn.disabled    = false;
+}
+
+// Load on start, refresh every 60 seconds
+loadDashboard();
+setInterval(loadDashboard, 60000);
+</script>
+
+</body>
+</html>
