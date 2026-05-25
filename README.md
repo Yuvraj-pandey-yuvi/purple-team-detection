@@ -132,8 +132,12 @@ The dashboard provides:
 - Real-time attacker geolocation map
 - Privilege escalation timeline
 - Active alerts with full context (process, user, timestamp)
+<img width="1298" height="625" alt="brave_screenshot (1)" src="https://github.com/user-attachments/assets/66cd9d01-8b1c-4ed5-ab00-3d3f5afb891d" />
+<img width="1300" height="564" alt="brave_screenshot (3)" src="https://github.com/user-attachments/assets/8890749d-8e42-46ee-acae-c76330ec2eaa" />
 
-[Add dashboard screenshot here]
+<img width="1296" height="394" alt="brave_screenshot (2)" src="https://github.com/user-attachments/assets/29588482-4716-4494-ba56-3ee9de0858f1" />
+
+<img width="1295" height="631" alt="brave_screenshot" src="https://github.com/user-attachments/assets/7edc07b5-6c5c-4b14-90f7-a4a86750f5cc" />
 
 ---
 
