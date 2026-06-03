@@ -1,189 +1,228 @@
 """
-schemas/auditd.py
------------------
-Schema for Linux auditd events — your primary source for:
-  T1003.008  /etc/shadow access
-  T1036      Masquerading (exe path mismatch)
-  T1053.003  Cron modification
-  T1136.001  User creation (secondary signal)
+schemas/normalizer.py
+---------------------
+The single function your detection engine calls: parse_raw_log().
 
-auditd log lines look like:
-  type=SYSCALL msg=audit(1705312200.123:456): arch=c000003e syscall=2
-    success=yes exit=3 a0=7f... a1=0 a2=1b6 a3=0 items=1 ppid=1234
-    pid=5678 auid=1000 uid=0 gid=0 euid=0 suid=0 fsuid=0
-    egid=0 sgid=0 fsgid=0 tty=pts0 ses=1 comm="python3"
-    exe="/usr/bin/python3" key="shadow_access"
+WHY A SINGLE ENTRY POINT:
+Your engine currently calls different parsers for different sources.
+With a normalizer, the engine loop becomes:
+
+    for line in all_log_lines:
+        event = parse_raw_log(line, source=LogSource.AUDITD)
+        if event is None:
+            parse_error_count += 1
+            continue
+        for rule in rules:
+            alerts.extend(rule.detect(event))
+
+This is the Log Normalization layer that security platforms like
+Splunk CIM, Elastic ECS, and Chronicle UDIS all implement — you're
+building your own lightweight version.
 """
 
 from __future__ import annotations
 
+import json
+import logging
 import re
-from datetime import datetime, timezone
-from typing import Optional
-from pydantic import Field, field_validator, model_validator
+from collections import defaultdict
+from typing import Optional, Union
+
+from pydantic import ValidationError
 
 from .base import BaseLogEvent, LogSource
+from .auditd import AuditdEvent
+from .auth_log import AuthLogEvent
+from .cloudtrail import CloudTrailEvent
 
-# ── Regex for the auditd timestamp embedded in msg= ─────────────────────────
-_MSG_TS = re.compile(r"msg=audit\((\d+\.\d+):\d+\)")
+logger = logging.getLogger(__name__)
 
-# ── Regex for key=value pairs in auditd lines ────────────────────────────────
-_KV     = re.compile(r'(\w+)=(?:"([^"]*)"|(\S+))')
+# Type alias for the union of all event types
+LogEvent = Union[AuditdEvent, AuthLogEvent, CloudTrailEvent]
+
+# ── auditd grouping ───────────────────────────────────────────────────────────
+
+_AUDIT_RE = re.compile(r"msg=audit\((\d+\.\d+):(\d+)\)")
+_KV_RE    = re.compile(r'(\w+)=(?:"([^"]*)"|(\S+))')
 
 
-def _parse_auditd_line(raw: str) -> dict:
-    """Extract key=value pairs from a raw auditd line.
-    
-    Returns a flat dict. Quoted values are unquoted.
-    Example:  comm="python3" exe="/usr/bin/python3"
-           → {"comm": "python3", "exe": "/usr/bin/python3"}
-    """
+def _parse_kv(line: str) -> dict:
     return {k: (v1 if v1 is not None else v2)
-            for k, v1, v2 in _KV.findall(raw)}
+            for k, v1, v2 in _KV_RE.findall(line)}
 
 
-class AuditdEvent(BaseLogEvent):
-    """A parsed auditd event.
-    
-    Field names match auditd field names exactly so rules written
-    against raw dicts can migrate with minimal changes.
+def group_audit_lines(audit_log: str) -> list[dict]:
+    """Group raw auditd text into merged dicts, one per logical event.
+
+    auditd writes one event as multiple lines sharing a serial number:
+      type=SYSCALL msg=audit(1705312200.123:456): exe="/tmp/evil" key="shadow_access"
+      type=PATH    msg=audit(1705312200.123:456): name="/etc/shadow"
+
+    Steps:
+      1. Group lines by serial number
+      2. Take SYSCALL as primary record
+      3. Add only 'name' from PATH record
+      4. Return list of merged dicts ready for AuditdEvent.from_dict()
     """
+    groups: dict[str, list[str]] = defaultdict(list)
+    for line in audit_log.split("\n"):
+        if not line.strip():
+            continue
+        m = _AUDIT_RE.search(line)
+        if m:
+            serial = m.group(2)
+            groups[serial].append(line)
 
-    source: LogSource = LogSource.AUDITD
+    result = []
+    for serial, lines in groups.items():
+        syscall_line = next((l for l in lines if "type=SYSCALL" in l), None)
+        path_line    = next((l for l in lines if "type=PATH"    in l), None)
 
-    # ── Identity fields ──────────────────────────────────────────────────────
-    auid: int = Field(description="Audit UID — the original user before su/sudo. "
-                                  "4294967295 (0xFFFFFFFF) means unset.")
-    uid: int  = Field(description="Real UID at time of syscall.")
-    euid: int = Field(description="Effective UID — catches privilege escalation "
-                                   "when euid=0 but auid!=0.")
+        if not syscall_line:
+            continue
+
+        merged = _parse_kv(syscall_line)
+        merged["_raw_syscall"] = syscall_line     # preserve for raw field
+
+        if path_line:
+            path_fields = _parse_kv(path_line)
+            if "name" in path_fields:
+                merged["name"] = path_fields["name"]
+
+        result.append(merged)
+
+    return result
+
+
+def parse_raw_log(
+    raw: str,
+    source: LogSource,
+    *,
+    strict: bool = False,
+) -> Optional[LogEvent]:
+    """Parse a raw log line into a typed, validated event object.
+
+    Args:
+        raw:    The raw log line or JSON string.
+        source: Which log source produced this line.
+        strict: If True, re-raise ValidationError instead of returning None.
+                Use strict=True in tests. Use strict=False in the engine loop
+                so one bad line doesn't crash the pipeline.
+
+    Returns:
+        A validated LogEvent subclass, or None if parsing failed.
+
+    Usage in detection engine:
+        event = parse_raw_log(line, LogSource.AUDITD)
+        if event is None:
+            stats["parse_errors"] += 1
+            continue
+        # event.auid, event.exe, event.key — all typed
+    """
+    try:
+        if source == LogSource.AUDITD:
+            return AuditdEvent.from_raw(raw)
+
+        elif source == LogSource.AUTH_LOG:
+            return AuthLogEvent.from_raw(raw)
+
+        elif source == LogSource.CLOUDTRAIL:
+            # CloudTrail lines from S3 are JSON objects
+            record = json.loads(raw)
+            return CloudTrailEvent.from_record(record)
+
+        else:
+            logger.warning("Unknown log source: %s", source)
+            return None
+
+    except (ValidationError, json.JSONDecodeError, ValueError) as exc:
+        if strict:
+            raise
+        logger.debug(
+            "Failed to parse %s log line: %s\nLine: %.200s",
+            source.value, exc, raw
+        )
+        return None
+
+
+def parse_cloudtrail_file(json_str: str) -> tuple[list[CloudTrailEvent], int]:
+    """Parse a full CloudTrail JSON file (the {"Records": [...]} format from S3).
     
-    # ── Process fields ───────────────────────────────────────────────────────
-    pid: int
-    ppid: int = 0
-    comm: str = Field(description="Process name from kernel (15 char limit, can be spoofed).")
-    exe: str  = Field(description="Full path to executable. Harder to spoof than comm. "
-                                   "Use this for masquerading detection (T1036).")
+    Returns (events, error_count).
     
-    # ── Event classification ─────────────────────────────────────────────────
-    syscall: Optional[int] = None
-    success: bool = True
-    key: Optional[str] = None
-    """auditd watch key — the label you set in audit rules.
-    e.g. 'shadow_access', 'cron_modification'. Primary routing signal."""
+    Usage:
+        with open("cloudtrail_2024-01-15.json") as f:
+            events, errors = parse_cloudtrail_file(f.read())
+    """
+    events = []
+    errors = 0
+    
+    try:
+        data = json.loads(json_str)
+        records = data.get("Records", [])
+    except json.JSONDecodeError as exc:
+        logger.error("CloudTrail file is not valid JSON: %s", exc)
+        return [], 1
 
-    # ── File access fields (present in PATH records) ─────────────────────────
-    name: Optional[str] = None
-    """File path accessed. Set in AUDIT_PATH records."""
+    for record in records:
+        try:
+            events.append(CloudTrailEvent.from_record(record))
+        except (ValidationError, ValueError) as exc:
+            logger.debug("CloudTrail record parse error: %s", exc)
+            errors += 1
 
-    record_type: str = Field(default="SYSCALL",
-                             description="SYSCALL, PATH, EXECVE, etc.")
+    return events, errors
 
-    # ── Derived convenience properties ───────────────────────────────────────
-    @property
-    def is_privileged_escalation(self) -> bool:
-        """True when a non-root user's process runs as root.
-        Core signal for privilege escalation detection.
-        """
-        UNSET_AUID = 4294967295
-        return (self.euid == 0 and 
-                self.auid != 0 and 
-                self.auid != UNSET_AUID)
 
-    @property
-    def exe_matches_comm(self) -> bool:
-        """False = possible masquerading (T1036).
-        e.g. comm='python3' but exe='/tmp/.hidden/python3'
-        """
-        import os
-        return os.path.basename(self.exe) == self.comm
+def parse_log_file(
+    filepath: str,
+    source: LogSource,
+) -> tuple[list[LogEvent], int]:
+    """Parse an entire log file, returning (events, error_count).
+    
+    Usage in your log collector:
+        auditd_events, errors = parse_log_file("/var/log/audit/audit.log",
+                                               LogSource.AUDITD)
+    """
+    events: list[LogEvent] = []
+    errors = 0
 
-    # ── Validators ───────────────────────────────────────────────────────────
-    @field_validator("success", mode="before")
-    @classmethod
-    def coerce_success(cls, v):
-        """auditd writes success=yes/no, not true/false."""
-        if isinstance(v, str):
-            return v.lower() == "yes"
-        return bool(v)
+    # CloudTrail files are JSON blobs, not line-oriented
+    if source == LogSource.CLOUDTRAIL:
+        with open(filepath, "r") as f:
+            content = f.read()
+        return parse_cloudtrail_file(content)
 
-    @field_validator("auid", "uid", "euid", "pid", "ppid", mode="before")
-    @classmethod
-    def coerce_int(cls, v):
-        """auditd emits all numeric fields as strings."""
-        return int(v)
+    # auditd files need grouping by serial number before parsing
+    if source == LogSource.AUDITD:
+        with open(filepath, "r", errors="replace") as f:
+            content = f.read()
+        groups = group_audit_lines(content)
+        for merged in groups:
+            try:
+                events.append(AuditdEvent.from_dict(merged))
+            except (ValidationError, ValueError) as exc:
+                errors += 1
+                logger.debug("auditd parse error: %s", exc)
+        return events, errors
 
-    @field_validator("timestamp", mode="before")
-    @classmethod
-    def parse_auditd_timestamp(cls, v, info):
-        """Extract epoch from msg=audit(EPOCH.MS:SERIAL).
-        Falls back to the value itself if it's already a number.
-        """
-        if isinstance(v, str) and "audit(" in v:
-            m = _MSG_TS.search(v)
-            if m:
-                return datetime.fromtimestamp(float(m.group(1)), tz=timezone.utc)
-        if isinstance(v, (int, float)):
-            return datetime.fromtimestamp(float(v), tz=timezone.utc)
-        return v  # let base validator handle datetime objects
+    # auth.log — line oriented
+    with open(filepath, "r", errors="replace") as f:
+        for lineno, line in enumerate(f, start=1):
+            line = line.rstrip("\n")
+            if not line.strip():
+                continue
+            event = parse_raw_log(line, source)
+            if event is None:
+                errors += 1
+                logger.debug("Parse error at %s line %d", filepath, lineno)
+            else:
+                events.append(event)
 
-    # ── Factory ──────────────────────────────────────────────────────────────
-    @classmethod
-    def from_dict(cls, merged: dict) -> "AuditdEvent":
-        """Build an AuditdEvent from a merged dict produced by group_audit_lines().
-
-        The merged dict has all SYSCALL fields plus 'name' from PATH.
-        Timestamp is extracted from merged['msg'] using _MSG_TS regex.
-
-        Usage:
-            groups = group_audit_lines(raw_text)
-            events = [AuditdEvent.from_dict(g) for g in groups]
-        """
-        # Extract epoch from msg=audit(EPOCH:SERIAL)
-        # _parse_kv gives us {"msg": "audit(1705312200.123:456)", ...}
-        # We still need to pull the epoch out with _MSG_TS
-        msg_val  = merged.get("msg", "")
-        ts_match = _MSG_TS.search(f"msg={msg_val}")
-        timestamp = float(ts_match.group(1)) if ts_match else 0.0
-
-        # Build raw string from the dict for forensic preservation
-        # We don't have the original line anymore so reconstruct it
-        raw = merged.get("_raw_syscall", str(merged))
-
-        # Known fields — everything else goes to extra
-        known = {"auid","uid","euid","pid","ppid","comm","exe",
-                 "syscall","success","key","name","type","msg","_raw_syscall"}
-
-        return cls(
-            source=LogSource.AUDITD,
-            timestamp=timestamp,
-            raw=raw,
-            auid=merged.get("auid", "4294967295"),
-            uid=merged.get("uid", "0"),
-            euid=merged.get("euid", "0"),
-            pid=merged.get("pid", "0"),
-            ppid=merged.get("ppid", "0"),
-            comm=merged.get("comm", ""),
-            exe=merged.get("exe", ""),
-            syscall=merged.get("syscall"),
-            success=merged.get("success", "yes"),
-            key=merged.get("key"),
-            name=merged.get("name"),        # from PATH record, may be None
-            record_type=merged.get("type", "SYSCALL"),
-            extra={k: v for k, v in merged.items() if k not in known},
+    if errors:
+        logger.warning(
+            "%s: %d/%d lines failed validation",
+            filepath, errors, errors + len(events)
         )
 
-    @classmethod
-    def from_raw(cls, raw_line: str) -> "AuditdEvent":
-        """Parse a single raw auditd line.
-
-        Kept for backward compatibility and testing single lines.
-        Internally groups the line (as a one-line 'file') then calls from_dict().
-        """
-        from .normalizer import group_audit_lines
-        groups = group_audit_lines(raw_line)
-        if groups:
-            return cls.from_dict(groups[0])
-        # Fallback: line had no msg=audit(...) — parse directly
-        fields = _parse_auditd_line(raw_line)
-        return cls.from_dict({**fields, "_raw_syscall": raw_line})
+    return events, errors
