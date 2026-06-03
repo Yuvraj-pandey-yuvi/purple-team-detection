@@ -1,0 +1,49 @@
+## Playbook: AWS Root Account Console Login (T1078.001)
+
+### Trigger
+rule_006 fires — CloudTrail ConsoleLogin where 
+userIdentity.type = Root
+
+### Severity: CRITICAL — always
+
+### Immediate Actions (0-15 mins)
+1. Immediately verify with your AWS account owner:
+   Was this login intentional?
+2. Check source IP — is it a known office/VPN IP?
+3. Check what actions root took after login:
+   aws cloudtrail lookup-events --lookup-attributes \
+   AttributeKey=Username,AttributeValue=root
+4. If unrecognized — treat as full account compromise
+
+### Investigation Questions
+- Who has the root password and MFA device?
+- Is the source IP recognized?
+- What time did this occur? After hours = highly suspicious
+- What actions were taken after login?
+- Were any IAM users, policies, or access keys modified?
+- Was CloudTrail disabled or modified after login?
+
+### Containment
+1. If compromise confirmed:
+   - Change root password immediately
+   - Invalidate root MFA device and re-enroll
+   - Review all IAM changes made during session
+   - Check for new IAM users or access keys created
+   - Check for CloudTrail tampering:
+     aws cloudtrail get-trail-status --name <trail>
+2. Enable root login alerting via CloudWatch if not already done
+3. Review all resources created/modified in session
+
+### Evidence to Collect
+- All CloudTrail events for root for past 24 hours
+- Source IP geolocation and threat intel lookup
+- IAM credential report before and after
+- Any resources created/modified during session
+
+### How to Prevent Recurrence
+- Enable MFA on root account — non-negotiable
+- Lock root access keys (delete them):
+  aws iam delete-access-key --access-key-id <key>
+- Set up CloudWatch alarm for any root activity
+- Use IAM users with appropriate permissions instead of root
+- Enable AWS Organizations SCP to restrict root actions

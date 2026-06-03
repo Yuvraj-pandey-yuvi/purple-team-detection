@@ -1,0 +1,44 @@
+## Playbook: Privilege Escalation Detected (T1548)
+
+### Trigger
+rule_005 fires — euid=0 with auid>=1000 and auid!=4294967295
+
+### Severity: CRITICAL
+
+### Immediate Actions (0-15 mins)
+1. Identify the user: event.auid, event.exe
+2. Check if escalation was authorized (sudo configured for this user):
+   cat /etc/sudoers | grep <username>
+3. Check what was done with root privileges:
+   ausearch -ua <auid> -ts <timestamp> | grep euid=0
+4. Check for persistence established with root access:
+   crontab -l (root)
+   cat /etc/cron.d/*
+   cat /root/.ssh/authorized_keys
+
+### Investigation Questions
+- Is this user authorized to use sudo?
+- What command was run as root?
+- Is the exe path expected for this operation?
+- Was this during business hours?
+- Did this follow a brute force or new user alert?
+
+### Containment
+1. If unauthorized — revoke sudo access immediately:
+   visudo — remove user entry
+2. Review all root-level actions in the session
+3. Check for SUID binaries added:
+   find / -perm -4000 -newer /tmp/baseline 2>/dev/null
+4. Check for new cron jobs, SSH keys, new users
+
+### Evidence to Collect
+- Full auditd session for the auid
+- /etc/sudoers state
+- Commands run as root (EXECVE records)
+- Files modified with root privileges
+
+### How to Prevent Recurrence
+- Apply principle of least privilege — sudo for specific commands only
+- Log all sudo usage (already done via auditd)
+- Regular sudo access reviews
+- Consider removing sudo entirely, use AWS Systems Manager Run Command

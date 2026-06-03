@@ -1,0 +1,49 @@
+## Playbook: New Local User Account Created (T1136.001)
+
+### Trigger
+rule_003 fires — new user added to Linux system
+
+### Severity
+CRITICAL (suspicious username) / HIGH (unknown username)
+
+### Immediate Actions (0-15 mins)
+1. Identify who created the account:
+   grep "useradd" /var/log/auth.log
+   grep "sudo" /var/log/auth.log | grep useradd
+2. Check if the creating user is legitimate
+3. Check new account's group memberships:
+   groups <new_username>
+   id <new_username>
+4. Check if SSH key was added for new account:
+   cat /home/<new_username>/.ssh/authorized_keys
+
+### Investigation Questions
+- Who created this account and why?
+- Is the new username suspicious (root, admin, service)?
+- Was an SSH key immediately added? (persistence signal)
+- Was the account added to sudo group?
+- Does this correlate with a prior brute force alert?
+
+### Containment
+1. Lock the account immediately:
+   passwd -l <new_username>
+2. Check for SSH keys and remove if unauthorized:
+   rm /home/<new_username>/.ssh/authorized_keys
+3. Check sudo access:
+   cat /etc/sudoers | grep <new_username>
+4. Review all actions taken by new account:
+   ausearch -ua <uid_of_new_account>
+5. If account is malicious — delete it:
+   userdel -r <new_username>
+
+### Evidence to Collect
+- auth.log lines around creation time
+- auditd logs for creating user's auid
+- /etc/passwd and /etc/shadow entries
+- SSH authorized_keys for new account
+
+### How to Prevent Recurrence
+- Alert on all useradd commands via auditd rule
+- Require change management ticket for new accounts
+- Regular /etc/passwd audits against known-good baseline
+- Use AWS Systems Manager instead of direct SSH where possible

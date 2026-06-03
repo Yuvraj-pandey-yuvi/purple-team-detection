@@ -1,0 +1,45 @@
+## Playbook: AWS Console Login Without MFA (T1078)
+
+### Trigger
+rule_002 fires — ConsoleLogin or API call where 
+mfaAuthenticated = false
+
+### Severity
+CRITICAL (console login) / MEDIUM (API call)
+
+### Immediate Actions (0-15 mins)
+1. Identify the user: event.actor_username
+2. Check if login is from known IP for this user
+3. Check what actions were taken after login:
+   aws cloudtrail lookup-events --lookup-attributes \
+   AttributeKey=Username,AttributeValue=<username>
+4. If unknown IP — assume compromise, act immediately
+
+### Investigation Questions
+- Is this IP known for this user?
+- What time did the login occur? Outside business hours = suspicious
+- What actions did the user take after login?
+- Has this user ever used MFA? Or was it never configured?
+- Are there other users logging in without MFA?
+
+### Containment
+1. If compromise suspected:
+   - Revoke all active sessions in IAM console
+   - Disable access keys immediately:
+     aws iam update-access-key --access-key-id <key> --status Inactive
+   - Force password reset
+2. Enable MFA enforcement via IAM policy:
+   Deny all actions if MFA not present
+3. Review all actions taken in the session for damage assessment
+
+### Evidence to Collect
+- CloudTrail events for the user for past 24 hours
+- Source IP geolocation
+- User agent string — browser vs CLI vs unusual tool
+- List of all API calls made in session
+
+### How to Prevent Recurrence
+- Enforce MFA via IAM policy — no exceptions
+- Use AWS Organizations SCP to enforce MFA account-wide
+- Set up CloudWatch alarm for ConsoleLogin without MFA
+- Regular IAM access reviews

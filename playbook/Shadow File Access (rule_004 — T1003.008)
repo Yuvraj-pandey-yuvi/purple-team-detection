@@ -1,0 +1,44 @@
+## Playbook: Unauthorized /etc/shadow Access (T1003.008)
+
+### Trigger
+rule_004 fires — process outside whitelist accessed /etc/shadow
+
+### Severity: CRITICAL
+
+### Immediate Actions (0-15 mins)
+1. Identify the process: event.exe, event.comm, event.auid
+2. Check if process is still running:
+   ps aux | grep <pid>
+3. Check what the process did with shadow file:
+   ausearch -f /etc/shadow -ts <timestamp>
+4. Check if password hashes were exfiltrated:
+   netstat -an | grep ESTABLISHED (active connections)
+
+### Investigation Questions
+- What process accessed /etc/shadow?
+- Is it a known binary in an unexpected location?
+- Was comm != exe? (masquerading signal)
+- What did the process do immediately after?
+- Were any network connections made after access?
+- Was John the Ripper or hashcat found on the system?
+
+### Containment
+1. Kill the suspicious process immediately:
+   kill -9 <pid>
+2. Check for exfiltration via VPC flow logs
+3. Assume all passwords are compromised — force reset for all users
+4. Check for cracking tools on system:
+   find / -name "john" -o -name "hashcat" 2>/dev/null
+5. Rotate all SSH keys
+
+### Evidence to Collect
+- Full auditd event group (SYSCALL + PATH records)
+- Process binary for malware analysis:
+   cp /proc/<pid>/exe /tmp/suspicious_binary
+- Network connections at time of access
+- Parent process tree: auditd ppid field
+
+### How to Prevent Recurrence
+- Restrict /etc/shadow permissions: chmod 000 /etc/shadow
+- Audit rule already in place — ensure it stays enabled
+- Monitor for auditd being disabled (T1562.001)

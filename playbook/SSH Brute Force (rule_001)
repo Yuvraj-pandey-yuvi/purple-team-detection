@@ -1,0 +1,48 @@
+## Playbook: SSH Brute Force Detected (T1110.001)
+
+### Trigger
+rule_001 fires — 5+ failed SSH attempts from same IP 
+within 300 seconds
+
+### Severity
+MEDIUM (slow scan) → HIGH (moderate) → CRITICAL (aggressive)
+
+### Immediate Actions (0-15 mins)
+1. Note the source IP, attack start time, targeted username
+2. Check if any subsequent successful login from same IP:
+   grep "Accepted" /var/log/auth.log | grep <source_ip>
+3. If successful login found — escalate to CRITICAL immediately
+4. Block source IP at AWS security group level:
+   aws ec2 authorize-security-group-ingress --group-id <sg-id> 
+   --protocol tcp --port 22 --cidr <source_ip>/32 --revoke
+
+### Investigation Questions
+- Did the attacker succeed? Check for Accepted password after failures
+- What username was targeted? root = automated, random = spray attack
+- Is this IP known malicious? Check against threat intel (AbuseIPDB)
+- Is SSH exposed to 0.0.0.0/0? It shouldn't be
+- Are there other IPs attacking simultaneously?
+
+### Containment
+1. Block source IP at security group level immediately
+2. If login succeeded — isolate instance, snapshot EBS volume for forensics
+3. Review SSH authorized_keys for backdoors:
+   cat /home/*/.ssh/authorized_keys
+   cat /root/.ssh/authorized_keys
+4. Check for new users created after the attack time:
+   grep "new user" /var/log/auth.log
+5. Check cron for persistence:
+   crontab -l && cat /etc/cron* 
+
+### Evidence to Collect
+- auth.log lines from attack window
+- auditd logs for session auid if login succeeded
+- AWS security group configuration at time of attack
+- Netflow/VPC flow logs for source IP
+
+### How to Prevent Recurrence
+- Restrict SSH to known IPs only in security group
+- Disable password auth, use key-based auth only
+- Deploy fail2ban for automatic IP blocking
+- Consider moving SSH to non-standard port (security through obscurity — not a real fix)
+- Enable AWS GuardDuty — detects brute force automatically
