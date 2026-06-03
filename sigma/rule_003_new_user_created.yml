@@ -1,0 +1,26 @@
+title: New Local User Account Created
+id: c3d4e5f6-a7b8-9012-cdef-123456789012
+status: experimental
+description: >
+  Detects creation of new local user accounts on Linux.
+  Suspicious usernames (root, admin, ubuntu etc) escalated
+  to CRITICAL by Python rule_003.
+author: Yuvraj Pandey
+date: 2026/06/04
+tags:
+    - attack.persistence
+    - attack.t1136.001
+logsource:
+    product: linux
+    service: auth
+detection:
+    selection:
+        message|contains:
+            - 'new user added'
+    condition: selection
+falsepositives:
+    - Legitimate system administration
+    - Automated provisioning scripts
+references:
+    - https://attack.mitre.org/techniques/T1136/001/
+level: high

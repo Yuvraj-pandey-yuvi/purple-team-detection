@@ -1,0 +1,26 @@
+title: SSH Brute Force Attempt
+id: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+status: experimental
+description: >
+  Detects failed SSH password authentication attempts.
+  Single-event match — threshold correlation (5+ attempts 
+  in 300s) handled by Python detection rule_001.
+author: Yuvraj Pandey
+date: 2026/06/04
+tags:
+    - attack.initial_access
+    - attack.t1110.001
+logsource:
+    product: linux
+    service: auth
+detection:
+    selection:
+        message|contains:
+            - 'Failed password'
+            - 'Invalid user'
+    condition: selection
+falsepositives:
+    - Legitimate users mistyping passwords
+references:
+    - https://attack.mitre.org/techniques/T1110/001/
+level: medium

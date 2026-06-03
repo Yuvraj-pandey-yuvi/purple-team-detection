@@ -1,0 +1,26 @@
+title: AWS Console Login Without MFA
+id: b2c3d4e5-f6a7-8901-bcde-f12345678901
+status: experimental
+description: >
+  Detects AWS console login where MFA was not used.
+  Single event — severity escalation handled by Python rule_002
+  which also detects API calls without MFA.
+author: Yuvraj Pandey
+date: 2026/06/04
+tags:
+    - attack.initial_access
+    - attack.t1078
+logsource:
+    product: aws
+    service: cloudtrail
+detection:
+    selection:
+        eventName: ConsoleLogin
+        userIdentity.sessionContext.attributes.mfaAuthenticated: 'false'
+    condition: selection
+falsepositives:
+    - Break-glass emergency access
+    - Service accounts without MFA configured
+references:
+    - https://attack.mitre.org/techniques/T1078/
+level: high

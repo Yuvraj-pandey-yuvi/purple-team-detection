@@ -1,0 +1,25 @@
+title: AWS Root Account Console Login
+id: f6a7b8c9-d0e1-2345-fabc-456789012345
+status: experimental
+description: >
+  Detects any AWS console login by the root account.
+  Root should never log in directly in a properly
+  configured AWS account.
+author: Yuvraj Pandey
+date: 2026/06/04
+tags:
+    - attack.initial_access
+    - attack.t1078.001
+logsource:
+    product: aws
+    service: cloudtrail
+detection:
+    selection:
+        eventName: ConsoleLogin
+        userIdentity.type: Root
+    condition: selection
+falsepositives:
+    - Emergency break-glass root access
+references:
+    - https://attack.mitre.org/techniques/T1078/001/
+level: critical

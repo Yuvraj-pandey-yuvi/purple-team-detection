@@ -1,0 +1,27 @@
+title: Privilege Escalation via euid=0
+id: e5f6a7b8-c9d0-1234-efab-345678901234
+status: experimental
+description: >
+  Detects non-root user processes running with root
+  effective UID. euid=0 with auid>=1000 and auid not
+  unset (4294967295) indicates privilege escalation.
+author: Yuvraj Pandey
+date: 2026/06/04
+tags:
+    - attack.privilege_escalation
+    - attack.t1548
+logsource:
+    product: linux
+    service: auditd
+detection:
+    selection:
+        euid: 0
+        auid|gte: 1000
+    filter:
+        auid: 4294967295
+    condition: selection and not filter
+falsepositives:
+    - Authorized sudo usage by admins
+references:
+    - https://attack.mitre.org/techniques/T1548/
+level: high
