@@ -1,0 +1,38 @@
+
+```yaml
+title: cloudtrail disabled 
+id: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+status: experimental
+description: >
+ detects if cloudtrail is disbles,stopped,deleted or aletered 
+author: Yuvraj Pandey
+date: 2026/06/04
+tags:
+    - attack.defense_evasion
+    - attack.t1562.002
+logsource:
+    product: aws
+    service: cloudtrail
+detection:
+    selection:
+        eventName:
+            - 'DeleteTrail'
+            - 'StopLogging'
+            - 'UpdateTrail'
+            - 'PutEventSelectors'
+falsepositives:
+    - Legitimate trail is stopped or altered
+references:
+    - https://attack.mitre.org/techniques/T1562/002/
+level: high
+
+
+
+```
+
+
+```
+
+
+```
+```
