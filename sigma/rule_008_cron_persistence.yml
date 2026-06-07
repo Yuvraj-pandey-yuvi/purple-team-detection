@@ -1,0 +1,39 @@
+```yaml
+```yaml
+title: cron persistence 
+id: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+status: experimental
+description: >
+ detects cron persistence attacks  on  changing cron files by using syscall 257,2,82,86
+author: Yuvraj Pandey
+date: 2026/06/04
+tags:
+    - attack.persistence
+    - attack.t1053.003
+logsource:
+    product: linux
+    service: auditd
+detection:
+    selection:
+        key: 'cron_modification'
+        syscall:
+            - 257
+            - 2
+            - 82
+            - 86
+    condition: selection
+falsepositives:
+    - Legitimate ls,read
+references:
+    - https://attack.mitre.org/techniques/T1053/003/
+level: critical
+
+
+
+```
+
+
+```
+
+
+```
