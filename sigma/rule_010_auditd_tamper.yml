@@ -1,0 +1,25 @@
+
+title: auditd Disabled or Modified
+id: g7h8i9j0-k1l2-3456-mnop-qr7890123456
+status: experimental
+description: >
+  Detects attempts to disable Linux auditd via auditctl -e 0
+  or service/systemctl stop. Note: if auditd is killed instantly
+  this rule may not fire — complement with heartbeat monitoring.
+author: Yuvraj Pandey
+date: 2026/06/08
+tags:
+    - attack.defense_evasion
+    - attack.t1562.001
+logsource:
+    product: linux
+    service: auditd
+detection:
+    selection:
+        key: 'auditd_tamper'
+    condition: selection
+falsepositives:
+    - Legitimate admin maintenance
+references:
+    - https://attack.mitre.org/techniques/T1562/001/
+level: critical
