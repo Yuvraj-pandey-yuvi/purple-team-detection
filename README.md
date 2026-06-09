@@ -22,7 +22,9 @@ Built as a demonstration of detection engineering principles — not a tutorial 
 
 
 
----<svg width="100%" viewBox="0 0 680 920" role="img" xmlns="http://www.w3.org/2000/svg">
+<img width="111" height="150" alt="purple_team_pipeline_flow" src="https://github.com/user-attachments/assets/113897df-e4cb-4012-866a-456b9022bb86" />
+
+<svg width="100%" viewBox="0 0 680 920" role="img" xmlns="http://www.w3.org/2000/svg">
 <title style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">Purple Team Detection Pipeline — complete data flow</title>
 <desc style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">Flowchart showing how logs move from raw files through collection, normalization, rules, and into the API</desc>
 <defs>
@@ -225,7 +227,6 @@ Built as a demonstration of detection engineering principles — not a tutorial 
 </g>
 
 </svg>
-
 ## ATT&CK Techniques Covered
 
 | # | Technique | Name | Log Source | Detection Method | Status |
