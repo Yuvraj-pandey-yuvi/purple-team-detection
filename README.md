@@ -176,6 +176,11 @@ These appeared naturally on the internet-facing EC2 instance within 24 hours of 
 - auditd killed via kill -9 or SIGKILL — process cannot log its own death
 - systemctl stop auditd — partially caught by auditd_tamper key,
   but only if auditctl was also used
+  - **Sudo token hijacking (T1548.003)**: Requires cross-source correlation 
+  between auditd euid=0 events and auth.log PAM authentication records.
+  If euid=0 appears without a corresponding PAM auth event within 900s 
+  (sudo cache TTL), that indicates cached token abuse. Planned: sliding 
+  window join on auid + timestamp across both log sources.
 
 Documenting blind spots is intentional — understanding what your detection system misses is as important as what it catches.
 
