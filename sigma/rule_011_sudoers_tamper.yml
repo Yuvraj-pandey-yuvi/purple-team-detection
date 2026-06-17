@@ -1,0 +1,26 @@
+```yaml
+
+title: sudoers_tampers
+id: g7h8i9j0-k1l2-3456-mnop-qr7890123456
+status: experimental
+description: >
+  Detects attempts to sudo escaltion by changing modifying the sudo configuration files
+author: Yuvraj Pandey
+date: 2026/06/08
+tags:
+    - attack.privilege_escalation 
+    - attack.t1549.003
+logsource:
+    product: linux
+    service: auditd
+detection:
+    selection:
+        key: 'sudoers_tamper'
+    condition: selection
+falsepositives:
+    - Legitimate admin maintenance
+references:
+    - https://attack.mitre.org/techniques/T1548/003
+level: critical
+
+```
