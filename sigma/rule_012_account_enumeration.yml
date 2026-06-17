@@ -1,0 +1,36 @@
+title: Local Account Enumeration
+id: h8i9j0k1-l2m3-4567-nopq-rs8901234567
+status: experimental
+description: >
+  Detects local account enumeration via sensitive file reads
+  or enumeration commands. Single-event match — threshold
+  correlation handled by Python rule_012.
+author: Yuvraj Pandey
+date: 2026/06/08
+tags:
+    - attack.discovery
+    - attack.t1087.001
+logsource:
+    product: linux
+    service: auditd
+detection:
+    selection_cmd:
+        exe|endswith:
+            - 'whoami'
+            - 'id'
+            - 'who'
+            - 'getent'
+            - 'finger'
+    selection_files:
+        name:
+            - '/etc/passwd'
+            - '/etc/group'
+            - '/etc/sudoers'
+            - '/etc/shadow'
+    condition: selection_cmd or selection_files
+falsepositives:
+    - Legitimate admin running diagnostics
+    - Monitoring scripts reading /etc/passwd
+references:
+    - https://attack.mitre.org/techniques/T1087/001/
+level: medium
