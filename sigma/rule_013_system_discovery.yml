@@ -1,0 +1,38 @@
+
+```yaml
+title: system_discovery
+id: h8i9j0k1-l2m3-4567-nopq-rs8901234567
+status: experimental
+description: >
+  Detects system discovery commands being used .groups  by auid. Only fire alert if no of attempts reaches threshold
+  correlation handled by Python rule_013.
+author: Yuvraj Pandey
+date: 2026/06/08
+tags:
+    - attack.discovery
+    - attack.t1082
+logsource:
+    product: linux
+    service: auditd
+detection:
+    selection_cmd:
+        exe|endswith:
+            - 'uname'
+            - 'hostname'
+            - 'uptime'
+            - 'ps'
+            - 'netstat'
+            - 'ss'
+            - 'ifconfig'
+            - 'ip'
+            - 'df'
+            - 'env'
+            - 'find'
+    condition: selection_cmd
+falsepositives:
+    - Legitimate admin running diagnostics
+  
+references:
+    - https://attack.mitre.org/techniques/T1082
+level: medium
+```
