@@ -67,6 +67,14 @@ class ATTCKTechnique(str, Enum):
     T1036     = "T1036"       # Masquerading
     T1053_003 = "T1053.003"   # Scheduled Task: Cron
     T1078     = "T1078"       # Valid Accounts
+    T1078_001 = "T1078.001"   # Valid Accounts: Default Accounts (Root)
+    T1562_002 = "T1562.002"   # Impair Defenses: Disable Cloud Logs
+    T1562_001 = "T1562.001"   # Impair Defenses: Disable or Modify Tools
+    T1087_001 = "T1087.001"   # Account Discovery: Local Account
+    T1082     = "T1082"       # System Information Discovery
+    T1548     = "T1548"       # Abuse Elevation Control (already exists)
+    
+
 
 
 # ── Base event ───────────────────────────────────────────────────────────────

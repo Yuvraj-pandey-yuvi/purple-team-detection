@@ -1,0 +1,149 @@
+[
+  {
+    "alert_id": null,
+    "rule_id": "rule_012_account_enumeration",
+    "technique": "T1087.001",
+    "severity": "HIGH",
+    "timestamp": "2026-06-20T19:57:50.949161Z",
+    "first_seen": "2026-06-20T19:56:01.206000Z",
+    "last_seen": "2026-06-20T19:56:01.208000Z",
+    "source_ip": null,
+    "username": null,
+    "auid": null,
+    "description": "Account enumeration by auid=4294967295: 3 events in 0s \u2014 commands: {'cron', 'unix_chkpwd'}",
+    "raw_log": null,
+    "log_source": "auditd",
+    "extra": {
+      "auid": 4294967295,
+      "commands": [
+        "cron",
+        "unix_chkpwd"
+      ],
+      "files": [
+        "/etc/shadow",
+        "/etc/passwd"
+      ],
+      "count": 3
+    }
+  },
+  {
+    "alert_id": null,
+    "rule_id": "rule_012_account_enumeration",
+    "technique": "T1087.001",
+    "severity": "HIGH",
+    "timestamp": "2026-06-20T19:57:50.949277Z",
+    "first_seen": "2026-06-20T19:56:01.209000Z",
+    "last_seen": "2026-06-20T19:56:01.209000Z",
+    "source_ip": null,
+    "username": null,
+    "auid": null,
+    "description": "Account enumeration by auid=0: 3 events in 0s \u2014 commands: {'cron'}",
+    "raw_log": null,
+    "log_source": "auditd",
+    "extra": {
+      "auid": 0,
+      "commands": [
+        "cron"
+      ],
+      "files": [
+        "/etc/passwd"
+      ],
+      "count": 3
+    }
+  },
+  {
+    "alert_id": null,
+    "rule_id": "rule_012_account_enumeration",
+    "technique": "T1087.001",
+    "severity": "HIGH",
+    "timestamp": "2026-06-20T19:57:50.949330Z",
+    "first_seen": "2026-06-20T19:56:15.999000Z",
+    "last_seen": "2026-06-20T19:57:24.450000Z",
+    "source_ip": null,
+    "username": null,
+    "auid": null,
+    "description": "Account enumeration by auid=1000: 3 events in 68s \u2014 commands: {'python3', 'nano'}",
+    "raw_log": null,
+    "log_source": "auditd",
+    "extra": {
+      "auid": 1000,
+      "commands": [
+        "python3",
+        "nano"
+      ],
+      "files": [
+        "/etc/passwd"
+      ],
+      "count": 3
+    }
+  },
+  {
+    "alert_id": null,
+    "rule_id": "rule_004_shadow_access",
+    "technique": "T1003.008",
+    "severity": "CRITICAL",
+    "timestamp": "2026-06-20T19:59:58.871456Z",
+    "first_seen": "2026-06-20T19:59:19.762000Z",
+    "last_seen": null,
+    "source_ip": null,
+    "username": null,
+    "auid": null,
+    "description": "Unauthorized /etc/shadow access by /usr/lib/cargo/bin/coreutils/cat (auid=1000, euid=0)",
+    "raw_log": null,
+    "log_source": "auditd",
+    "extra": {
+      "exe": "/usr/lib/cargo/bin/coreutils/cat",
+      "comm": "cat",
+      "auid": 1000,
+      "euid": 0,
+      "key": "shadow_access"
+    }
+  },
+  {
+    "alert_id": null,
+    "rule_id": "rule_008_cron_persistence",
+    "technique": "T1053.003",
+    "severity": "CRITICAL",
+    "timestamp": "2026-06-20T19:59:58.871542Z",
+    "first_seen": "2026-06-20T19:59:28.429000Z",
+    "last_seen": null,
+    "source_ip": null,
+    "username": null,
+    "auid": null,
+    "description": "Cron file modified: /etc/cron.d/ by /usr/lib/cargo/bin/coreutils/tee (auid=1000, euid=0)",
+    "raw_log": null,
+    "log_source": "auditd",
+    "extra": {
+      "exe": "/usr/lib/cargo/bin/coreutils/tee",
+      "comm": "tee",
+      "auid": 1000,
+      "euid": 0,
+      "syscall": 257,
+      "file": "/etc/cron.d/"
+    }
+  },
+  {
+    "alert_id": null,
+    "rule_id": "rule_013_system_discovery",
+    "technique": "T1082",
+    "severity": "MEDIUM",
+    "timestamp": "2026-06-20T20:02:17.648121Z",
+    "first_seen": "2026-06-20T20:02:11.009000Z",
+    "last_seen": "2026-06-20T20:02:11.024000Z",
+    "source_ip": null,
+    "username": null,
+    "auid": null,
+    "description": "System discovery by auid=1000: 5 recon commands in 0s \u2014 possible post-exploitation fingerprinting",
+    "raw_log": null,
+    "log_source": "auditd",
+    "extra": {
+      "auid": 1000,
+      "commands": [
+        "uname",
+        "hostname",
+        "ps"
+      ],
+      "count": 5
+    }
+  }
+]

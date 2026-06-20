@@ -17,8 +17,6 @@ import re
 from datetime import datetime, timezone
 from typing import Optional
 from ipaddress import IPv4Address, IPv6Address, ip_address
-
-from pyparsing import line
 from pydantic import Field, field_validator, IPvAnyAddress
 
 from .base import BaseLogEvent, LogSource
@@ -37,6 +35,8 @@ _NEW_USER   = re.compile(
 _USERADD_CMD = re.compile(
     r"COMMAND=.*useradd\s+(\S+)"
 )
+
+
 _SUDO_USER  = re.compile(
     r"(\S+)\s+:\s+TTY=\S+\s+;\s+PWD=\S+\s+;\s+USER=(\S+)\s+;\s+COMMAND=(.*)"
 )
@@ -44,8 +44,7 @@ _SUDO_USER  = re.compile(
 _SYSLOG_TS  = re.compile(
     r"^(\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})"
 )
-# Add this regex alongside _SYSLOG_TS
-_ISO_TS = re.compile(r'^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[\.\d]*[+-]\d{2}:\d{2})')
+
 _SYSLOG_FMT = "%b %d %H:%M:%S"
 
 
@@ -101,47 +100,28 @@ class AuthLogEvent(BaseLogEvent):
         except ValueError:
             raise ValueError(f"Invalid IP address: {v!r}")
 
-    # @field_validator("timestamp", mode="before")
-    # @classmethod
-    # def parse_syslog_ts(cls, v):
-    #     """Parse syslog timestamp format 'Jan 15 10:30:00'.
-        
-    #     syslog doesn't include year — we use current year, which is
-    #     correct 99% of the time. Log rotation handles year boundary.
-    #     """
-    #     if isinstance(v, str) and not v.lstrip("-").isdigit():
-    #         m = _SYSLOG_TS.match(v)
-    #         if m:
-    #             from datetime import datetime as dt
-    #             current_year = dt.now().year
-    #             try:
-    #                 parsed = dt.strptime(
-    #                     f"{current_year} {m.group(1).strip()}", 
-    #                     f"%Y {_SYSLOG_FMT}"
-    #                 )
-    #                 return parsed.replace(tzinfo=timezone.utc)
-    #             except ValueError:
-    #                 pass
-    #     return v  # let base validator handle epoch ints / datetime objects
-
     @field_validator("timestamp", mode="before")
     @classmethod
     def parse_syslog_ts(cls, v):
-        if isinstance(v, str):
-        # Try ISO-8601 first (newer Ubuntu)
-            m = _ISO_TS.match(v)
-        if m:
-            return datetime.fromisoformat(m.group(1))
-        # Fall back to syslog format (older Ubuntu)
-        m = _SYSLOG_TS.match(v)
-        if m:
-            current_year = datetime.now().year
-            parsed = datetime.strptime(
-                f"{current_year} {m.group(1).strip()}",
-                f"%Y {_SYSLOG_FMT}"
-            )
-            return parsed.replace(tzinfo=timezone.utc)
-        return v
+        """Parse syslog timestamp format 'Jan 15 10:30:00'.
+        
+        syslog doesn't include year — we use current year, which is
+        correct 99% of the time. Log rotation handles year boundary.
+        """
+        if isinstance(v, str) and not v.lstrip("-").isdigit():
+            m = _SYSLOG_TS.match(v)
+            if m:
+                from datetime import datetime as dt
+                current_year = dt.now().year
+                try:
+                    parsed = dt.strptime(
+                        f"{current_year} {m.group(1).strip()}", 
+                        f"%Y {_SYSLOG_FMT}"
+                    )
+                    return parsed.replace(tzinfo=timezone.utc)
+                except ValueError:
+                    pass
+        return v  # let base validator handle epoch ints / datetime objects
 
     # ── Factory ──────────────────────────────────────────────────────────────
     @classmethod
@@ -154,12 +134,7 @@ class AuthLogEvent(BaseLogEvent):
         line = raw_line.strip()
         
         # --- Extract timestamp (first 15 chars of syslog lines) ---
-        #ts_str = line[:15] if len(line) >= 15 else line
-
-         # Extract timestamp — handle both formats
-        m_iso = _ISO_TS.match(line)
-        m_sys = _SYSLOG_TS.match(line)
-        ts_str = m_iso.group(1) if m_iso else (m_sys.group(1) if m_sys else line[:15])
+        ts_str = line[:15] if len(line) >= 15 else line
 
         # --- Extract hostname and process ---
         parts = line.split()

@@ -166,7 +166,6 @@ class TechniqueStatus(BaseModel):
     alert_count: int = 0
     log_source: Optional[LogSource] = None
 
-
 TECHNIQUE_NAMES: dict[ATTCKTechnique, str] = {
     ATTCKTechnique.T1110_001: "Brute Force: Password Guessing",
     ATTCKTechnique.T1136_001: "Create Local Account",
@@ -174,6 +173,12 @@ TECHNIQUE_NAMES: dict[ATTCKTechnique, str] = {
     ATTCKTechnique.T1036:     "Masquerading",
     ATTCKTechnique.T1053_003: "Scheduled Task/Job: Cron",
     ATTCKTechnique.T1078:     "Valid Accounts (No MFA)",
+    ATTCKTechnique.T1078_001: "Valid Accounts: Root Login",
+    ATTCKTechnique.T1548:     "Abuse Elevation Control",
+    ATTCKTechnique.T1562_001: "Impair Defenses: Disable auditd",
+    ATTCKTechnique.T1562_002: "Impair Defenses: Disable CloudTrail",
+    ATTCKTechnique.T1087_001: "Account Discovery: Local Account",
+    ATTCKTechnique.T1082:     "System Information Discovery",
 }
 
 

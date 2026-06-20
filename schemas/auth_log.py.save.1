@@ -1,4 +1,73 @@
+ python3 detection/engine.py
+/home/ubuntu/project/schemas/auth_log.py:129: UserWarning: `parse_syslog_ts` overrides an existing Pydantic `@field_validator` decorator
+  def parse_syslog_ts(cls, v):
+=======================================================
+  Purple Detection Engine
+  Run time: 2026-06-18T08:33:55.148343+00:00
+=======================================================
+
+  Loaded 0 existing alerts
+
+[1/3] Processing auth.log...
+  New lines: 55, parsed: 55, errors: 0
+  SSH brute force:         0 alerts
+  New user:                0 alerts
+  Brute force success:     0 alerts
+
+[2/3] Processing auditd...
+  [INFO] Log rotation detected for /var/log/audit/audit.log, resetting position
+  New events: 0
+  Shadow access:           0 alerts
+  Cron persistence:        0 alerts
+  auditd disabled:         0 alerts
+  Sudoers tamper:          0 alerts
+  Account enumeration:     0 alerts
+  System discovery:        0 alerts
+
+[3/3] Processing CloudTrail...
+  Processed: 349491201539_CloudTrail_eu-north-1_20260618T0820Z_t38TcNRgKDDrjfY7.json (1 events)
+  New events: 1
+  No MFA:                  0 alerts
+  Root login:              0 alerts
+  CloudTrail disabled:     0 alerts
+
+  New alerts: 0 (0 duplicates suppressed)
+  Total accumulated alerts: 0
+
+=======================================================
+  COVERAGE: 0.0% (0/6 techniques)
+  Parse errors: 115
+=======================================================
+
 """
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 schemas/auth_log.py
 -------------------
 Schema for /var/log/auth.log events — your source for:
@@ -101,28 +170,28 @@ class AuthLogEvent(BaseLogEvent):
         except ValueError:
             raise ValueError(f"Invalid IP address: {v!r}")
 
-    # @field_validator("timestamp", mode="before")
-    # @classmethod
-    # def parse_syslog_ts(cls, v):
-    #     """Parse syslog timestamp format 'Jan 15 10:30:00'.
+    @field_validator("timestamp", mode="before")
+    @classmethod
+    def parse_syslog_ts(cls, v):
+        """Parse syslog timestamp format 'Jan 15 10:30:00'.
         
-    #     syslog doesn't include year — we use current year, which is
-    #     correct 99% of the time. Log rotation handles year boundary.
-    #     """
-    #     if isinstance(v, str) and not v.lstrip("-").isdigit():
-    #         m = _SYSLOG_TS.match(v)
-    #         if m:
-    #             from datetime import datetime as dt
-    #             current_year = dt.now().year
-    #             try:
-    #                 parsed = dt.strptime(
-    #                     f"{current_year} {m.group(1).strip()}", 
-    #                     f"%Y {_SYSLOG_FMT}"
-    #                 )
-    #                 return parsed.replace(tzinfo=timezone.utc)
-    #             except ValueError:
-    #                 pass
-    #     return v  # let base validator handle epoch ints / datetime objects
+        syslog doesn't include year — we use current year, which is
+        correct 99% of the time. Log rotation handles year boundary.
+        """
+        if isinstance(v, str) and not v.lstrip("-").isdigit():
+            m = _SYSLOG_TS.match(v)
+            if m:
+                from datetime import datetime as dt
+                current_year = dt.now().year
+                try:
+                    parsed = dt.strptime(
+                        f"{current_year} {m.group(1).strip()}", 
+                        f"%Y {_SYSLOG_FMT}"
+                    )
+                    return parsed.replace(tzinfo=timezone.utc)
+                except ValueError:
+                    pass
+        return v  # let base validator handle epoch ints / datetime objects
 
     @field_validator("timestamp", mode="before")
     @classmethod

@@ -77,21 +77,22 @@ def save_alerts(alerts: list[Alert]) -> None:
 
 
 # ── Deduplication ─────────────────────────────────────────────────────────────
-
 def deduplicate_alerts(
     existing: list[Alert],
     new: list[Alert]
 ) -> list[Alert]:
     existing_keys = {
-        f"{a.rule_id}:{a.source_ip}:{a.username}"
+        f"{a.rule_id}:{a.source_ip}:{a.username}:{a.extra.get('auid', '')}"
         for a in existing
     }
+
     deduped = []
     for alert in new:
-        key = f"{alert.rule_id}:{alert.source_ip}:{alert.username}"
+        key = f"{alert.rule_id}:{alert.source_ip}:{alert.username}:{alert.extra.get('auid', '')}"
         if key not in existing_keys:
             deduped.append(alert)
             existing_keys.add(key)
+
     return deduped
 
 

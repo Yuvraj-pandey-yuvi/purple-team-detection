@@ -45,10 +45,16 @@ LogEvent = Union[AuditdEvent, AuthLogEvent, CloudTrailEvent]
 _AUDIT_RE = re.compile(r"msg=audit\((\d+\.\d+):(\d+)\)")
 _KV_RE    = re.compile(r'(\w+)=(?:"([^"]*)"|(\S+))')
 
-
 def _parse_kv(line: str) -> dict:
-    return {k: (v1 if v1 is not None else v2)
-            for k, v1, v2 in _KV_RE.findall(line)}
+    result = {}
+    for k, v1, v2 in _KV_RE.findall(line):
+        # Skip uppercase translated fields appended by auditd
+        # e.g. AUID="root" UID="root" — human readable, not numeric values
+        # We want auid=0 uid=0 not AUID="root" UID="root"
+        if k[0].isupper():
+            continue
+        result[k] =v1 if v1 else v2
+    return result
 
 
 def group_audit_lines(audit_log: str) -> list[dict]:
