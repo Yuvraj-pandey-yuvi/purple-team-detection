@@ -145,5 +145,51 @@
       ],
       "count": 5
     }
+  },
+  {
+    "alert_id": null,
+    "rule_id": "rule_008_cron_persistence",
+    "technique": "T1053.003",
+    "severity": "HIGH",
+    "timestamp": "2026-06-22T07:45:12.755812Z",
+    "first_seen": "2026-06-22T07:20:05.118000Z",
+    "last_seen": null,
+    "source_ip": null,
+    "username": null,
+    "auid": null,
+    "description": "Cron file modified: cron by /usr/bin/systemd-tmpfiles (auid=4294967295, euid=0)",
+    "raw_log": null,
+    "log_source": "auditd",
+    "extra": {
+      "exe": "/usr/bin/systemd-tmpfiles",
+      "comm": "systemd-tmpfile",
+      "auid": 4294967295,
+      "euid": 0,
+      "syscall": 257,
+      "file": "cron"
+    }
+  },
+  {
+    "alert_id": null,
+    "rule_id": "rule_005_privilege_escalation",
+    "technique": "T1548",
+    "severity": "CRITICAL",
+    "timestamp": "2026-06-22T07:45:12.795070Z",
+    "first_seen": "2026-06-22T07:18:46.898000Z",
+    "last_seen": null,
+    "source_ip": null,
+    "username": null,
+    "auid": null,
+    "description": "Privilege escalation detected: auid=1000 running as euid=0 via /usr/lib/openssh/sshd-session",
+    "raw_log": null,
+    "log_source": "auditd",
+    "extra": {
+      "exe": "/usr/lib/openssh/sshd-session",
+      "comm": "sshd-session",
+      "auid": 1000,
+      "uid": 0,
+      "euid": 0,
+      "pid": 336201
+    }
   }
 ]

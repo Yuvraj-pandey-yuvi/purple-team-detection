@@ -41,7 +41,7 @@ from rules.rule_010_auditd_disabled    import detect as rule_auditd_disabled
 from rules.rule_011_sudoers_tamper     import detect as rule_sudoers
 from rules.rule_012_account_enumeration import detect as rule_enum
 from rules.rule_013_system_discovery   import detect as rule_discovery
-
+from rules.rule_005_privilige_escaltion import detect as rule_privesc
 # ── Rules — CloudTrail ───────────────────────────────────────────────────────
 from rules.rule_002_no_mfa_login       import detect as rule_no_mfa
 from rules.rule_006_root_account_login import detect as rule_root_login
@@ -77,6 +77,7 @@ def save_alerts(alerts: list[Alert]) -> None:
 
 
 # ── Deduplication ─────────────────────────────────────────────────────────────
+
 def deduplicate_alerts(
     existing: list[Alert],
     new: list[Alert]
@@ -160,18 +161,24 @@ def run_engine() -> AlertReport:
     sudoers_alerts  = rule_sudoers(auditd_events)
     enum_alerts     = rule_enum(auditd_events)
     discovery_alerts = rule_discovery(auditd_events)
+    privesc_alerts = rule_privesc(auditd_events)
+
     new_alerts.extend(shadow_alerts)
     new_alerts.extend(cron_alerts)
     new_alerts.extend(auditd_alerts)
     new_alerts.extend(sudoers_alerts)
     new_alerts.extend(enum_alerts)
     new_alerts.extend(discovery_alerts)
+    new_alerts.extend(privesc_alerts)
+
     print(f"  Shadow access:           {len(shadow_alerts)} alerts")
     print(f"  Cron persistence:        {len(cron_alerts)} alerts")
     print(f"  auditd disabled:         {len(auditd_alerts)} alerts")
     print(f"  Sudoers tamper:          {len(sudoers_alerts)} alerts")
     print(f"  Account enumeration:     {len(enum_alerts)} alerts")
     print(f"  System discovery:        {len(discovery_alerts)} alerts")
+    print(f"  Privilege escalation:    {len(privesc_alerts)} alerts")
+
 
     # ── CloudTrail ────────────────────────────────────────────
     print("\n[3/3] Processing CloudTrail...")
