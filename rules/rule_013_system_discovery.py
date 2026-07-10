@@ -6,6 +6,8 @@ from schemas import (
     Severity, LogSource
 )
 
+EXCLUDED_AUIDS = {4294967295, 0}
+
 DISCOVERY_COMMANDS = {
     "uname", "hostname", "uptime",
     "ps", "top", "htop",
@@ -27,6 +29,8 @@ def detect(events: list[AuditdEvent]) -> list[Alert]:
     by_auid: dict[int, list[AuditdEvent]] = defaultdict(list)
 
     for event in events:
+        if event.auid in EXCLUDED_AUIDS:
+            continue
         cmd = os.path.basename(event.exe or "")
         if cmd in DISCOVERY_COMMANDS:
             by_auid[event.auid].append(event)

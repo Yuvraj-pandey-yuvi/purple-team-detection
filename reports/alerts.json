@@ -191,5 +191,26 @@
       "euid": 0,
       "pid": 336201
     }
+  },
+  {
+    "alert_id": null,
+    "rule_id": "rule_010_auditd_tamper",
+    "technique": "T1562.001",
+    "severity": "CRITICAL",
+    "timestamp": "2026-07-10T04:37:36.799114Z",
+    "first_seen": "2026-07-10T04:34:01.422000Z",
+    "last_seen": null,
+    "source_ip": null,
+    "username": null,
+    "auid": null,
+    "description": "auditctl executed by auid=1000 euid=0 via /usr/lib/cargo/bin/coreutils/tee \u2014 possible attempt to disable audit logging",
+    "raw_log": null,
+    "log_source": "auditd",
+    "extra": {
+      "exe": "/usr/lib/cargo/bin/coreutils/tee",
+      "comm": "tee",
+      "auid": 1000,
+      "euid": 0
+    }
   }
 ]

@@ -4,6 +4,13 @@ from schemas import (
     Severity, LogSource
 )
 
+TAMPER_KEYS = {
+    "auditd_tamper",        # auditctl execution
+    "auditd_rules_tamper",  # direct edit of audit rules files
+    "syslog_tamper",        # rsyslog config modification
+    "bootloader_tamper"     #modyfying grub files to change configuration at reboot
+}
+
 def detect(events: list[AuditdEvent]) -> list[Alert]:
     """
     Detect auditd tampering via auditctl execution.
@@ -19,7 +26,7 @@ def detect(events: list[AuditdEvent]) -> list[Alert]:
 
     for event in events:
         # Primary signal — auditctl was executed
-        if event.key != "auditd_tamper":
+        if event.key not in TAMPER_KEYS:
             continue
 
         # Any execution of auditctl by a non-system process is suspicious

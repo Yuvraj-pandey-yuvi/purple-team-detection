@@ -41,7 +41,7 @@ from rules.rule_010_auditd_disabled    import detect as rule_auditd_disabled
 from rules.rule_011_sudoers_tamper     import detect as rule_sudoers
 from rules.rule_012_account_enumeration import detect as rule_enum
 from rules.rule_013_system_discovery   import detect as rule_discovery
-from rules.rule_005_privilige_escaltion import detect as rule_privesc
+from rules.rule_005_privilige_escalation import detect as rule_privesc
 # ── Rules — CloudTrail ───────────────────────────────────────────────────────
 from rules.rule_002_no_mfa_login       import detect as rule_no_mfa
 from rules.rule_006_root_account_login import detect as rule_root_login
