@@ -4,10 +4,14 @@ from schemas import (
     Severity, LogSource
 )
 
+PRIVESC_KEYS = {"sudo_execution", "su_execution", "privilege_change"}
+
 def detect(events: list[AuditdEvent]) -> list[Alert]:
     alerts = []
 
     for event in events:
+        if event.key not in PRIVESC_KEYS:
+            continue
         if not event.is_privileged_escalation:
             continue
 

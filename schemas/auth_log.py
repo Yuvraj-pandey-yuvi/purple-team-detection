@@ -101,28 +101,7 @@ class AuthLogEvent(BaseLogEvent):
         except ValueError:
             raise ValueError(f"Invalid IP address: {v!r}")
 
-    # @field_validator("timestamp", mode="before")
-    # @classmethod
-    # def parse_syslog_ts(cls, v):
-    #     """Parse syslog timestamp format 'Jan 15 10:30:00'.
-        
-    #     syslog doesn't include year — we use current year, which is
-    #     correct 99% of the time. Log rotation handles year boundary.
-    #     """
-    #     if isinstance(v, str) and not v.lstrip("-").isdigit():
-    #         m = _SYSLOG_TS.match(v)
-    #         if m:
-    #             from datetime import datetime as dt
-    #             current_year = dt.now().year
-    #             try:
-    #                 parsed = dt.strptime(
-    #                     f"{current_year} {m.group(1).strip()}", 
-    #                     f"%Y {_SYSLOG_FMT}"
-    #                 )
-    #                 return parsed.replace(tzinfo=timezone.utc)
-    #             except ValueError:
-    #                 pass
-    #     return v  # let base validator handle epoch ints / datetime objects
+    
 
     @field_validator("timestamp", mode="before")
     @classmethod
@@ -130,8 +109,8 @@ class AuthLogEvent(BaseLogEvent):
         if isinstance(v, str):
         # Try ISO-8601 first (newer Ubuntu)
             m = _ISO_TS.match(v)
-        if m:
-            return datetime.fromisoformat(m.group(1))
+            if m:
+                return datetime.fromisoformat(m.group(1))
         # Fall back to syslog format (older Ubuntu)
         m = _SYSLOG_TS.match(v)
         if m:

@@ -121,6 +121,7 @@ class BaseLogEvent(BaseModel):
         """Accepts datetime objects and makes them UTC-aware.
         Subclasses parse strings into datetime first, then this runs.
         """
+        print("ran base.py validator")
         if isinstance(v, datetime):
             if v.tzinfo is None:
                 return v.replace(tzinfo=timezone.utc)

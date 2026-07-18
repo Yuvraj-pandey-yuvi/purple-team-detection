@@ -35,7 +35,7 @@ from rules.rule_007_brute_force_success import detect as rule_brute_success
 
 # ── Rules — auditd ───────────────────────────────────────────────────────────
 from rules.rule_004_shadow_access      import detect as rule_shadow
-# from rules.rule_005_cron_persistence   import detect as rule_cron
+from rules.rule_014_masquerading       import detect as rule_masquerading
 from rules.rule_008_cron_persisitence  import detect as rule_cron  # fix typo later
 from rules.rule_010_auditd_disabled    import detect as rule_auditd_disabled
 from rules.rule_011_sudoers_tamper     import detect as rule_sudoers
@@ -162,6 +162,7 @@ def run_engine() -> AlertReport:
     enum_alerts     = rule_enum(auditd_events)
     discovery_alerts = rule_discovery(auditd_events)
     privesc_alerts = rule_privesc(auditd_events)
+    masquerading_alerts = rule_masquerading(auditd_events)
 
     new_alerts.extend(shadow_alerts)
     new_alerts.extend(cron_alerts)
@@ -170,6 +171,7 @@ def run_engine() -> AlertReport:
     new_alerts.extend(enum_alerts)
     new_alerts.extend(discovery_alerts)
     new_alerts.extend(privesc_alerts)
+    new_alerts.extend(masquerading_alerts)
 
     print(f"  Shadow access:           {len(shadow_alerts)} alerts")
     print(f"  Cron persistence:        {len(cron_alerts)} alerts")
@@ -178,7 +180,7 @@ def run_engine() -> AlertReport:
     print(f"  Account enumeration:     {len(enum_alerts)} alerts")
     print(f"  System discovery:        {len(discovery_alerts)} alerts")
     print(f"  Privilege escalation:    {len(privesc_alerts)} alerts")
-
+    print(f"  Masquerading:             {len(masquerading_alerts)} alerts")
 
     # ── CloudTrail ────────────────────────────────────────────
     print("\n[3/3] Processing CloudTrail...")
