@@ -8,7 +8,7 @@ def detect(events: list[CloudTrailEvent]) -> list[Alert]:
     alerts = []
 
     for event in events:
-        if not (event.actor_type == "Root" and event.is_console_login):
+        if not (event.actor_type == "Root" and event.is_console_login and event.login_success):
             continue
 
         alerts.append(Alert(
