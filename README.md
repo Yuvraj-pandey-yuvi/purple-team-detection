@@ -182,6 +182,23 @@ These appeared naturally on the internet-facing EC2 instance within 24 hours of 
   (sudo cache TTL), that indicates cached token abuse. Planned: sliding 
   window join on auid + timestamp across both log sources.
 
+- **`AttackSpeed.AGGRESSIVE` classification is currently unreachable.**
+  `rule_001`'s sliding window fires the instant `THRESHOLD` (5) attempts are
+  seen, then resets — so `attempt_count` is always exactly 5 at first fire,
+  capping the maximum possible rate at `5 / max(duration, 1) = 5`, which can
+  never exceed the AGGRESSIVE threshold of `rate > 10`. Documented and pinned
+  down by a regression test rather than silently left as dead code.
+
+- **CloudTrail test fixtures are based on a real captured sample, not a
+  live schema contract.** `make_cloudtrail_event` builds nested JSON
+  matching an actual observed CloudTrail record (see `schemas/cloudtrail.py`
+  docstring). If AWS changes CloudTrail's event schema in the future, these
+  tests would continue passing against the old, now-stale assumption rather
+  than catching the drift — a known limitation of mocking an external,
+  vendor-controlled data contract. Mitigation: periodically diff a freshly
+  captured real record against the fixture's structure; not currently
+  automated.
+
 Documenting blind spots is intentional — understanding what your detection system misses is as important as what it catches.
 
 ---
