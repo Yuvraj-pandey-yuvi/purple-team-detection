@@ -6,7 +6,7 @@ import pytest
 from datetime import datetime, timezone
 from schemas import AuthLogEvent, LogSource
 from schemas import AuthLogEvent, LogSource, CloudTrailEvent
-
+from schemas import AuditdEvent
 @pytest.fixture
 def make_auth_event():
     def _make(**overrides):
@@ -56,4 +56,21 @@ def make_cloudtrail_event():
             "errorCode": error_code,
         }
         return CloudTrailEvent.from_record(record)
+    return _make
+
+@pytest.fixture
+def make_auditd_event():
+    def _make(**overrides):
+        defaults = dict(
+            timestamp=datetime(2026, 1, 15, 10, 30, 0, tzinfo=timezone.utc),
+            raw="placeholder raw auditd line",
+            auid=1000,
+            uid=0,
+            euid=0,
+            pid=1234,
+            comm="python3",
+            exe="/usr/bin/python3",
+        )
+        defaults.update(overrides)
+        return AuditdEvent(**defaults)
     return _make
