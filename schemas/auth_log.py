@@ -112,14 +112,14 @@ class AuthLogEvent(BaseLogEvent):
             if m:
                 return datetime.fromisoformat(m.group(1))
         # Fall back to syslog format (older Ubuntu)
-        m = _SYSLOG_TS.match(v)
-        if m:
-            current_year = datetime.now().year
-            parsed = datetime.strptime(
+            m = _SYSLOG_TS.match(v)
+            if m:
+                current_year = datetime.now().year
+                parsed = datetime.strptime(
                 f"{current_year} {m.group(1).strip()}",
                 f"%Y {_SYSLOG_FMT}"
-            )
-            return parsed.replace(tzinfo=timezone.utc)
+                 )
+                return parsed.replace(tzinfo=timezone.utc)
         return v
 
     # ── Factory ──────────────────────────────────────────────────────────────
