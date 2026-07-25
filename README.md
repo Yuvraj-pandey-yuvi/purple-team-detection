@@ -198,6 +198,24 @@ These appeared naturally on the internet-facing EC2 instance within 24 hours of 
   vendor-controlled data contract. Mitigation: periodically diff a freshly
   captured real record against the fixture's structure; not currently
   automated.
+  - **`rule_011` (sudoers tamper) was completely non-functional in
+  production until discovered via test-driven investigation.** Two
+  independent, stacked failures: (1) no auditd watch rule existed for
+  `/etc/sudoers` at all — confirmed via `auditctl -l` — so the rule
+  could never receive a matching event regardless of code correctness;
+  (2) even after adding the watch rule, the original design attempted
+  to substring-match "dangerous" sudoers directives (`NOPASSWD`, etc.)
+  against `event.raw` — but auditd captures syscall-level metadata only
+  (process, path, syscall number), never actual file content, confirmed
+  via real `ausearch` output against both `/etc/shadow` and `/etc/sudoers`
+  test edits. The dangerous-flag detection was removed; the rule now
+  correctly alerts CRITICAL on any sudoers modification without
+  pretending to distinguish severity by content it cannot see. This is
+  the strongest argument in this project for treating detection rules
+  as needing periodic **live-data verification**, not just unit tests
+  against mocked events — unit tests alone would never have caught
+  either failure, since both are about the gap between what the code
+  assumes reality provides and what auditd actually delivers.
 
 Documenting blind spots is intentional — understanding what your detection system misses is as important as what it catches.
 
