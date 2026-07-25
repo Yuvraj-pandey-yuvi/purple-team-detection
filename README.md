@@ -17,7 +17,7 @@ Built as a demonstration of detection engineering principles — not a tutorial 
 
 ## Architecture
 
-![Purple Team Pipeline Architecture](docs/images/architecture-diagram.png)
+![Purple Team Pipeline Architecture](docs/images/architecture-diagram.jpg)
 
 *(Six layers: Log Sources → Log Collector → Schema Layer → Detection Rules → Engine → API + Dashboard. See the "Schema Layer" section below for detail on the middle layers.)*
 
