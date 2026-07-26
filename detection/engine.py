@@ -7,7 +7,7 @@ import os
 import sys
 from datetime import datetime, timezone
 
-sys.path.insert(0, os.path.expanduser('~/project'))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # ── Collectors ────────────────────────────────────────────────────────────────
 from logs.log_collector import (
@@ -78,24 +78,21 @@ def save_alerts(alerts: list[Alert]) -> None:
 
 # ── Deduplication ─────────────────────────────────────────────────────────────
 
-def deduplicate_alerts(
-    existing: list[Alert],
-    new: list[Alert]
-) -> list[Alert]:
-    existing_keys = {
-        f"{a.rule_id}:{a.source_ip}:{a.username}:{a.extra.get('auid', '')}"
-        for a in existing
-    }
+def deduplicate_alerts(existing, new):
+    def _key(a):
+        if a.dedup_key:
+            return f"{a.rule_id}:{a.dedup_key}"
+        # fallback for rules not yet migrated to dedup_key
+        return f"{a.rule_id}:{a.source_ip}:{a.username}:{a.extra.get('auid', '')}"
 
+    existing_keys = {_key(a) for a in existing}
     deduped = []
     for alert in new:
-        key = f"{alert.rule_id}:{alert.source_ip}:{alert.username}:{alert.extra.get('auid', '')}"
+        key = _key(alert)
         if key not in existing_keys:
             deduped.append(alert)
             existing_keys.add(key)
-
     return deduped
-
 
 # ── Main engine ───────────────────────────────────────────────────────────────
 
