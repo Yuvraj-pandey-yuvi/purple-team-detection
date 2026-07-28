@@ -1,0 +1,16 @@
+services:
+  engine:
+    build: .
+    command: sh detection/run_loop.sh
+    volumes:
+      - ./reports:/app/reports
+      - /var/log/auth.log:/var/log/auth.log:ro
+      - /var/log/audit/audit.log:/var/log/audit/audit.log:ro
+
+  dashboard:
+    build: .
+    command: python3 -m uvicorn dashboard.api:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./reports:/app/reports

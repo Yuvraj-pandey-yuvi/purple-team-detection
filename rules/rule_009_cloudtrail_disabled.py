@@ -3,7 +3,7 @@ from schemas import (
     CloudTrailEvent, Alert, ATTCKTechnique,
     Severity, LogSource
 )
-
+ 
 CRITICAL_EVENTS = {"DeleteTrail", "StopLogging"}
 HIGH_EVENTS     = {"UpdateTrail", "PutEventSelectors"}
 
@@ -26,6 +26,7 @@ def detect(events: list[CloudTrailEvent]) -> list[Alert]:
             first_seen  = event.timestamp,
             source_ip   = event.source_ip,
             username    = event.actor_username,
+            dedup_key=f"{event.actor_username}:{event.event_name}",
             log_source  = LogSource.CLOUDTRAIL,
             description = (
                 f"CloudTrail impaired: {event.event_name} "

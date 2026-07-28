@@ -31,6 +31,7 @@ def detect(events: list[CloudTrailEvent]) -> list[Alert]:
             first_seen  = event.timestamp,
             source_ip   = event.source_ip,
             username    = event.actor_username,
+            dedup_key=f"{event.actor_username}:{event.event_name}",
             log_source  = LogSource.CLOUDTRAIL,
             description = description,
             extra       = {

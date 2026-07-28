@@ -54,6 +54,7 @@ def detect(events: list[AuditdEvent]) -> list[Alert]:
                     timestamp   = datetime.now(timezone.utc),
                     first_seen  = first.timestamp,
                     last_seen   = event.timestamp,
+                    dedup_key=f"{auid}:{first.timestamp}",
                     log_source  = LogSource.AUDITD,
                     description = (
                         f"System discovery by auid={auid}: "

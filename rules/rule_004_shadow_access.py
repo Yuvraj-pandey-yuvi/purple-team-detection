@@ -36,6 +36,7 @@ def detect(events: list[AuditdEvent]) -> list[Alert]:
             severity    = Severity.CRITICAL,
             timestamp   = datetime.now(timezone.utc),
             first_seen  = event.timestamp,
+            dedup_key=f"{event.exe}:{event.auid}",
             log_source  = LogSource.AUDITD,
             description = (
                 f"Unauthorized /etc/shadow access by {event.exe} "

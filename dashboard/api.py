@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,16 +22,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-REPORT_PATH = os.path.expanduser(
-    '~/project/reports/latest_report.json'
-)
-DASHBOARD_PATH = os.path.expanduser(
-    '~/project/dashboard'
-)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+REPORT_PATH = str(PROJECT_ROOT / "reports" / "latest_report.json")
+DASHBOARD_PATH = str(PROJECT_ROOT / "dashboard")
 
 
 def load_report():
-    """Load and return the latest report"""
     if not os.path.exists(REPORT_PATH):
         raise HTTPException(
             status_code=404,
@@ -40,24 +37,45 @@ def load_report():
         return json.load(f)
 
 
-# ── ROUTES ───────────────────────────────────────────────
+def _to_frontend_alert(a: dict) -> dict:
+    """The dashboard's index.html JS was built against an older,
+    flatter alert shape (rule_name, reason, comm, attempts,
+    auid_human, etc.) that doesn't match the current Alert schema
+    (rule_id, description, extra={...}). Rather than rewrite the
+    frontend JS, this maps each real alert onto the field names it
+    expects, without changing any HTML/JS.
+    """
+    extra = a.get("extra", {}) or {}
+    auid = extra.get("auid")
+
+    out = {
+        **a,  # keep everything real (rule_id, technique, severity, etc.)
+        **extra,  # flatten extra fields (comm, exe, auid, attempt_count, etc.) to top level
+        "rule_name": a.get("rule_id"),
+        "reason":    a.get("description"),
+        "auid_human": str(auid) if auid is not None else None,
+        "attempts":   extra.get("attempt_count"),
+        "cron_file":  extra.get("file"),
+        "created_by": extra.get("auid_human"),
+        "privilege_escalated": a.get("technique") == "T1548",
+        "name_suspicious": extra.get("signal") == "name_mismatch",
+    }
+    return out
+
 
 @app.get("/")
 def serve_dashboard():
-    """Serve the HTML dashboard"""
     index_path = os.path.join(DASHBOARD_PATH, 'index.html')
     return FileResponse(index_path)
 
 
 @app.get("/report")
 def get_report():
-    """Full detection report"""
     return load_report()
 
 
 @app.get("/summary")
 def get_summary():
-    """Coverage summary only"""
     report = load_report()
     return {
         'generated_at': report.get('generated_at'),
@@ -67,14 +85,12 @@ def get_summary():
 
 @app.get("/techniques")
 def get_techniques():
-    """ATT&CK technique coverage"""
     report = load_report()
     return report.get('techniques', {})
 
 
 @app.get("/alerts")
 def get_alerts():
-    """All alerts sorted by severity"""
     report   = load_report()
     alerts   = report.get('alerts', [])
     order    = {'CRITICAL': 0, 'HIGH': 1, 'MEDIUM': 2}
@@ -82,33 +98,27 @@ def get_alerts():
         alerts,
         key=lambda x: order.get(x.get('severity', 'MEDIUM'), 9)
     )
-    return sorted_alerts
+    return [_to_frontend_alert(a) for a in sorted_alerts]
 
 
 @app.get("/user-activity")
 def get_user_activity():
-    """User account activity summary"""
     report = load_report()
     return report.get('user_activity', {})
 
 
 @app.get("/attackers")
 def get_attackers():
-    """SSH attacker IPs with metadata"""
     report = load_report()
     return report.get('user_activity', {}).get('ssh_attackers', {})
 
 
 @app.post("/refresh")
 def refresh_report():
-    """
-    Trigger a fresh detection run and update the report.
-    Runs report_generator.py as a subprocess.
-    """
     try:
         result = subprocess.run(
             [sys.executable, '-m', 'reports.report_generator'],
-            cwd=os.path.expanduser('~/project'),
+            cwd=str(PROJECT_ROOT),
             capture_output=True,
             text=True,
             timeout=120
@@ -132,7 +142,6 @@ def refresh_report():
 
 @app.get("/health")
 def health():
-    """Health check"""
     report_exists = os.path.exists(REPORT_PATH)
     return {
         'status':        'running',

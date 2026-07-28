@@ -14,6 +14,20 @@ COMM_EXE_WHITELIST = {
     ("sh", "/usr/bin/dash"),
     ("sh", "/bin/dash"),
 }
+import re
+
+_INTERPRETER_BASENAME_RE = re.compile(
+    r"^(python3(\.\d+)?|python2?(\.\d+)?|dash|bash|sh|perl|awk|ruby|node)$"
+)
+
+def _is_known_interpreter(exe: str) -> bool:
+    """True if exe's basename matches a common shell/language interpreter.
+    Interpreters legitimately show exe=interpreter, comm=script-name for
+    every shebang-invoked script on the system — this is not masquerading,
+    it's how Linux always executes scripts. Pattern-matched rather than an
+    exact-path list so future Python/shell versions don't need manual updates.
+    """
+    return bool(_INTERPRETER_BASENAME_RE.match(os.path.basename(exe)))
 
 
 def detect(events: list[AuditdEvent]) -> list[Alert]:
@@ -51,14 +65,16 @@ def detect(events: list[AuditdEvent]) -> list[Alert]:
             event.comm, exe_basename
         )
         is_known_symlink = (event.comm, event.exe) in COMM_EXE_WHITELIST
+        is_interpreter = _is_known_interpreter(event.exe)
 
-        if name_mismatches and not is_legit_truncation and not is_known_symlink:
+        if name_mismatches and not is_legit_truncation and not is_known_symlink and not is_interpreter:
             alerts.append(Alert(
                 rule_id     = "rule_014_masquerading",
                 technique   = ATTCKTechnique.T1036,
                 severity    = Severity.CRITICAL,
                 timestamp   = datetime.now(timezone.utc),
                 first_seen  = event.timestamp,
+                dedup_key=f"{event.exe}:{event.comm}:{event.auid}:{name_mismatches}",
                 log_source  = LogSource.AUDITD,
                 description = (
                     f"Process name mismatch: comm='{event.comm}' "
@@ -74,7 +90,7 @@ def detect(events: list[AuditdEvent]) -> list[Alert]:
             ))
 
         # --- Signal 2: sensitive name running from an untrusted path -
-        if event.comm in SENSITIVE_PROCESS_NAMES and not exe_in_trusted_dir(event.exe):
+        if event.comm in SENSITIVE_PROCESS_NAMES and not exe_in_trusted_dir(event.exe) and not _is_known_interpreter(event.exe):
             alerts.append(Alert(
                 rule_id     = "rule_014_masquerading",
                 technique   = ATTCKTechnique.T1036,

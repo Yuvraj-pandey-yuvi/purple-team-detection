@@ -6,6 +6,7 @@ import json
 import os
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -48,7 +49,7 @@ from rules.rule_006_root_account_login import detect as rule_root_login
 from rules.rule_009_cloudtrail_disabled import detect as rule_ct_disabled
 
 # ── State files ───────────────────────────────────────────────────────────────
-ALERTS_FILE = os.path.expanduser('~/project/reports/alerts.json')
+ALERTS_FILE = str(Path(__file__).resolve().parent.parent / "reports" / "alerts.json")
 
 
 # ── Alert persistence ─────────────────────────────────────────────────────────

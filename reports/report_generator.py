@@ -1,177 +1,126 @@
-# report_generator.py
-# Generates a structured JSON report from detection engine output
-# This feeds the dashboard in Phase 6
+# reports/report_generator.py
+# Generates a structured JSON report from the detection engine's REAL
+# current output (AlertReport + CoverageSummary), for the dashboard API.
 
 import json
 import os
-import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
-sys.path.insert(0, os.path.expanduser('~/project'))
+from detection.engine import run_engine
 
-from detection.engine import run_engine, TECHNIQUES
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _alert_to_dict(alert) -> dict:
+    return alert.model_dump(mode="json")
 
 
 def generate_report():
-    """
-    Runs the detection engine and saves results as JSON.
-    Returns the report dict.
-    """
-
     print("Running detection engine...")
-    alerts, detected_techniques = run_engine()
+    report_obj = run_engine()
+    alerts = [_alert_to_dict(a) for a in report_obj.alerts]
 
-    # ── SUMMARY ─────────────────────────────────────────
-    total      = len(TECHNIQUES)
-    detected   = len(detected_techniques)
-    missed     = total - detected
-    coverage   = round(detected / total * 100, 1) if total > 0 else 0
+    total    = report_obj.coverage.total_techniques
+    detected = report_obj.coverage.detected_count
+    missed   = total - detected
+    coverage = report_obj.coverage.coverage_pct
 
-    # ── TECHNIQUE BREAKDOWN ─────────────────────────────
+    # ── TECHNIQUE BREAKDOWN (restored — the dashboard's ATT&CK matrix
+    # and "Alerts by Technique" chart both read report.techniques,
+    # keyed by technique id, shaped {name, detected, status, alert_count}) ──
     techniques = {}
-    for tid, tname in TECHNIQUES.items():
-        is_detected = tid in detected_techniques
-
-        # Find alerts for this technique
-        technique_alerts = [
-            a for a in alerts
-            if a.get('technique', '').startswith(tid)
-        ]
-
+    for t in report_obj.coverage.techniques:
+        tid = t.technique.value if hasattr(t.technique, "value") else str(t.technique)
         techniques[tid] = {
-            'name':         tname,
-            'detected':     is_detected,
-            'status':       'detected' if is_detected else 'missed',
-            'alert_count':  len(technique_alerts),
+            "name":        t.name,
+            "detected":    t.detected,
+            "status":      "detected" if t.detected else "missed",
+            "alert_count": t.alert_count,
         }
 
-    # ── ATTACKER IP SUMMARY (for map) ───────────────────
-    attacker_ips = []
+    severity_counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
     for alert in alerts:
-        if alert.get('rule_id') == 'RULE-001':
-            attacker_ips.append({
-                'ip':           alert.get('source_ip'),
-                'attempts':     alert.get('attempts'),
-                'attack_speed': alert.get('attack_speed'),
-                'first_seen':   alert.get('first_seen'),
-                'last_seen':    alert.get('last_seen'),
-                'time_window':  alert.get('time_window_seconds'),
-            })
-
-    # ── ALERTS BY SEVERITY ───────────────────────────────
-    severity_counts = {'CRITICAL': 0, 'HIGH': 0, 'MEDIUM': 0}
-    for alert in alerts:
-        sev = alert.get('severity', 'UNKNOWN')
+        sev = alert.get("severity", "UNKNOWN")
         if sev in severity_counts:
             severity_counts[sev] += 1
 
-    # ── ALERTS BY LOG SOURCE ────────────────────────────
     source_counts = {}
     for alert in alerts:
-        source = alert.get('log_source', 'unknown')
+        source = alert.get("log_source", "unknown")
         source_counts[source] = source_counts.get(source, 0) + 1
 
+    ssh_attackers = {}
+    attacker_ips = []
+    for alert in alerts:
+        if alert.get("technique") == "T1110.001" and alert.get("source_ip"):
+            ip = alert["source_ip"]
+            extra = alert.get("extra", {})
+            entry = {
+                "attempts":     extra.get("attempt_count"),  # matches frontend's `data.attempts`
+                "attack_speed": extra.get("attack_speed"),
+                "first_seen":   alert.get("first_seen"),
+                "last_seen":    alert.get("last_seen"),
+                "geo": None,
+            }
+            ssh_attackers[ip] = entry
+            attacker_ips.append({"ip": ip, **entry})
 
-    # ── USER ACTIVITY SUMMARY (for bar charts) ──────────
-
-    # Which auid generated the most alerts
     auid_alert_counts = {}
-    for alert in alerts:
-        auid_human = alert.get('auid_human')
-        if auid_human and auid_human != 'unknown':
-            auid_alert_counts[auid_human] = (
-                auid_alert_counts.get(auid_human, 0) + 1
-            )
-
-    # Which user created accounts
-    account_creators = {}
-    for alert in alerts:
-        if alert.get('rule_id') == 'RULE-003':
-            creator  = alert.get('created_by', 'unknown')
-            new_user = alert.get('new_username', 'unknown')
-            account_creators[creator] = (
-                account_creators.get(creator, [])
-            )
-            account_creators[creator].append(new_user)
-
-    # Which user triggered privilege escalation
+    user_technique_map = {}
     privilege_escalations = []
+
     for alert in alerts:
-        if alert.get('privilege_escalated'):
+        extra = alert.get("extra", {})
+        auid = extra.get("auid")
+        technique = alert.get("technique", "unknown")
+
+        if auid is not None:
+            key = str(auid)
+            auid_alert_counts[key] = auid_alert_counts.get(key, 0) + 1
+            user_technique_map.setdefault(key, [])
+            if technique not in user_technique_map[key]:
+                user_technique_map[key].append(technique)
+
+        if technique == "T1548" and auid is not None:
             privilege_escalations.append({
-                'auid_human': alert.get('auid_human', 'unknown'),
-                'auid':       alert.get('auid', 'unknown'),
-                'euid':       alert.get('euid', 'unknown'),
-                'technique':  alert.get('technique'),
-                'comm':       alert.get('comm', 'unknown'),
-                'timestamp':  alert.get('timestamp', 'unknown'),
+                "auid_human": str(auid),   # frontend expects `auid_human`
+                "auid":       auid,
+                "euid":       extra.get("euid"),
+                "technique":  technique,
+                "comm":       extra.get("comm"),
+                "timestamp":  alert.get("timestamp"),
             })
 
-    # Which techniques each user triggered
-    user_technique_map = {}
-    for alert in alerts:
-        auid_human = alert.get('auid_human', 'unknown')
-        technique  = alert.get('technique', 'unknown')
-        if auid_human == 'unknown':
-            continue
-        if auid_human not in user_technique_map:
-            user_technique_map[auid_human] = []
-        if technique not in user_technique_map[auid_human]:
-            user_technique_map[auid_human].append(technique)
-
-    # SSH login attempts by source IP with geolocation placeholder
-    ssh_attackers = {}
-    for alert in alerts:
-        if alert.get('rule_id') == 'RULE-001':
-            ip = alert.get('source_ip', 'unknown')
-            ssh_attackers[ip] = {
-                'attempts':     alert.get('attempts', 0),
-                'attack_speed': alert.get('attack_speed', 'unknown'),
-                'first_seen':   alert.get('first_seen', 'unknown'),
-                'last_seen':    alert.get('last_seen', 'unknown'),
-                'time_window':  alert.get('time_window_seconds', 0),
-                # Geolocation filled by dashboard via ip-api.com
-                'geo': None,
-            }
-
-
-    
-    # ── FULL REPORT ─────────────────────────────────────
     report = {
-        'generated_at': datetime.now(timezone.utc).isoformat(),
-        'summary': {
-            'total_techniques': total,
-            'detected':         detected,
-            'missed':           missed,
-            'coverage_percent': coverage,
-            'total_alerts':     len(alerts),
-            'severity_counts':  severity_counts,
-            'source_counts':    source_counts,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "summary": {
+            "total_techniques": total,
+            "detected":         detected,
+            "missed":           missed,
+            "coverage_percent": coverage,
+            "total_alerts":     len(alerts),
+            "severity_counts":  severity_counts,
+            "source_counts":    source_counts,
         },
-        'techniques':   techniques,
-        'attacker_ips': attacker_ips,
-        'alerts':       alerts,
-
-        # New user activity sections
-        'user_activity': {
-            'auid_alert_counts':      auid_alert_counts,
-            'account_creators':       account_creators,
-            'privilege_escalations':  privilege_escalations,
-            'user_technique_map':     user_technique_map,
-            'ssh_attackers':          ssh_attackers,
+        "techniques":   techniques,
+        "attacker_ips": attacker_ips,
+        "alerts":       alerts,
+        "user_activity": {
+            "auid_alert_counts":     auid_alert_counts,
+            "privilege_escalations": privilege_escalations,
+            "user_technique_map":    user_technique_map,
+            "ssh_attackers":         ssh_attackers,
         },
     }
-    # ── SAVE REPORT ─────────────────────────────────────
-    output_dir  = os.path.expanduser('~/project/reports')
-    output_path = os.path.join(output_dir, 'latest_report.json')
 
-    os.makedirs(output_dir, exist_ok=True)
-    with open(output_path, 'w') as f:
+    output_dir = PROJECT_ROOT / "reports"
+    output_path = output_dir / "latest_report.json"
+    output_dir.mkdir(exist_ok=True)
+    with open(output_path, "w") as f:
         json.dump(report, f, indent=2, default=str)
 
     print(f"\nReport saved to {output_path}")
-
-    # ── PRINT SUMMARY ───────────────────────────────────
     print(f"\n{'='*45}")
     print(f"  REPORT SUMMARY")
     print(f"{'='*45}")

@@ -70,6 +70,7 @@ def detect(events: list[AuthLogEvent]) -> list[Alert]:
                     timestamp=datetime.now(timezone.utc),
                     first_seen=first.timestamp,
                     last_seen=last.timestamp,
+                    dedup_key=event.source_ip,
                     source_ip=ip,
                     username=attempt.username,
                     log_source=LogSource.AUTH_LOG,

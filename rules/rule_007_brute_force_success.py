@@ -45,6 +45,7 @@ def detect(events: list[AuthLogEvent]) -> list[Alert]:
                     last_seen   = accepted.timestamp,
                     source_ip   = ip,
                     username    = accepted.username,
+                    dedup_key=f"{ip}:{accepted.username}",
                     log_source  = LogSource.AUTH_LOG,
                     description = (
                         f"Brute force SUCCESS — {len(failures)} failures "

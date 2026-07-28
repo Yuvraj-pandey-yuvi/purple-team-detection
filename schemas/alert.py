@@ -70,6 +70,8 @@ class Alert(BaseModel):
     """Original log line(s). Include for analyst review; omit for /summary."""
 
     log_source: LogSource
+    #dedup key 
+    dedup_key: Optional[str] = None
     
     # Rule-specific extras
     extra: dict[str, Any] = Field(default_factory=dict)

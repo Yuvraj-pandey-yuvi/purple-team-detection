@@ -21,6 +21,7 @@ SENSITIVE_FILES = {
 WINDOW_SECONDS = 120
 THRESHOLD      = 5
 
+
 def detect(events: list[AuditdEvent]) -> list[Alert]:
     alerts = []
     by_auid: dict[int, list[AuditdEvent]] = defaultdict(list)
@@ -57,6 +58,7 @@ def detect(events: list[AuditdEvent]) -> list[Alert]:
                     timestamp   = datetime.now(timezone.utc),
                     first_seen  = first.timestamp,
                     last_seen   = event.timestamp,
+                    dedup_key=f"{auid}:{first.timestamp}",
                     log_source  = LogSource.AUDITD,
                     description = (
                         f"Account enumeration by auid={auid}: "

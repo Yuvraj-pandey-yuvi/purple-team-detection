@@ -17,6 +17,7 @@ def detect(events: list[CloudTrailEvent]) -> list[Alert]:
             severity    = Severity.CRITICAL,
             timestamp   = datetime.now(timezone.utc),
             first_seen  = event.timestamp,
+            dedup_key=event.source_ip,
             log_source  = LogSource.CLOUDTRAIL,
             description = (
                 f"Root account console login detected from "

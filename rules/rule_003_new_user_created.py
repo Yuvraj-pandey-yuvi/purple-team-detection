@@ -31,6 +31,7 @@ def detect(events: list[AuthLogEvent]) -> list[Alert]:
             timestamp   = datetime.now(timezone.utc),
             first_seen  = event.timestamp,
             username    = event.new_username,
+            dedup_key=event.new_username,
             log_source  = LogSource.AUTH_LOG,
             description = (
                 f"New user '{event.new_username}' created on {event.hostname}"
