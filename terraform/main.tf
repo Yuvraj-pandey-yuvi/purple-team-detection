@@ -1,28 +1,16 @@
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
-}
-
-provider "aws" {
-  region = "eu-north-1"
-}
-
 resource "aws_instance" "purple_project" {
   ami                    = "ami-05d62b9bc5a6ca605"
   instance_type          = "t3.micro"
   key_name               = "buddyssh"
   subnet_id              = "subnet-0132054950bdd5619"
   vpc_security_group_ids = [aws_security_group.purple_project_sg.id]
-  iam_instance_profile = aws_iam_instance_profile.ec2_ssm_profile.name
+  iam_instance_profile   = aws_iam_instance_profile.ec2_ssm_profile.name
 
   tags = {
     Name = "purple-project"
   }
 }
+
 resource "aws_security_group" "purple_project_sg" {
   name        = "default"
   description = "default VPC security group"
@@ -51,6 +39,7 @@ resource "aws_security_group" "purple_project_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
+
 resource "aws_iam_role" "ec2_ssm_role" {
   name = "ec2-ssm-role"
 
