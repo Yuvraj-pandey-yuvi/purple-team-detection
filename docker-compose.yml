@@ -14,3 +14,24 @@ services:
       - "8000:8000"
     volumes:
       - ./reports:/app/reports
+
+  cowrie:
+    restart: unless-stopped
+    build:
+      context: ./honeypot/cowrie
+      dockerfile: docker/Dockerfile
+    ports:
+      - "2222:2222"
+      - "2223:2223"
+    volumes:
+      - cowrie-etc:/cowrie/cowrie-git/etc
+      - cowrie-var:/cowrie/cowrie-git/var
+    cap_drop:
+      - ALL
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  cowrie-etc:
+  cowrie-var:

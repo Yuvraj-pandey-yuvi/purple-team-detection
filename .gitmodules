@@ -1,0 +1,3 @@
+[submodule "honeypot/cowrie"]
+	path = honeypot/cowrie
+	url = https://github.com/cowrie/cowrie.git
