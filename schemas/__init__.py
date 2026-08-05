@@ -23,6 +23,7 @@ from .base import (
 from .auditd import AuditdEvent
 from .auth_log import AuthLogEvent
 from .cloudtrail import CloudTrailEvent
+from .cowrie import CowrieSession, CowrieLoginAttempt, CowrieCommand, parse_cowrie_sessions
 from .alert import (
     Alert,
     AlertReport,
@@ -43,10 +44,10 @@ __all__ = [
     # Enums
     "LogSource", "Severity", "ATTCKTechnique", "AttackSpeed",
     # Event models
-    "BaseLogEvent", "AuditdEvent", "AuthLogEvent", "CloudTrailEvent",
+    "BaseLogEvent", "AuditdEvent", "AuthLogEvent", "CloudTrailEvent","CowrieSession", "CowrieLoginAttempt", "CowrieCommand",
     # Alert models
     "Alert", "AlertReport", "AttackerProfile", "UserActivity",
     "CoverageSummary", "TechniqueStatus", "TECHNIQUE_NAMES",
     # Normalizer
-    "LogEvent", "parse_raw_log", "parse_log_file", "parse_cloudtrail_file",
+    "LogEvent", "parse_raw_log", "parse_log_file", "parse_cloudtrail_file","parse_cowrie_sessions",
 ]

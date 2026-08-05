@@ -24,7 +24,7 @@ class LogSource(str, Enum):
     AUDITD    = "auditd"
     AUTH_LOG  = "auth_log"
     CLOUDTRAIL = "cloudtrail"
-
+    COWRIE    = "cowrie"
 
 class Severity(str, Enum):
     """Severity levels used across all detection rules.
