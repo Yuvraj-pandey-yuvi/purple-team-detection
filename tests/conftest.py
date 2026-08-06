@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from schemas import AuthLogEvent, LogSource
 from schemas import AuthLogEvent, LogSource, CloudTrailEvent
 from schemas import AuditdEvent
+from schemas import CowrieSession, CowrieLoginAttempt, CowrieCommand
+
 @pytest.fixture
 def make_auth_event():
     def _make(**overrides):
@@ -73,4 +75,50 @@ def make_auditd_event():
         )
         defaults.update(overrides)
         return AuditdEvent(**defaults)
+    return _make
+
+@pytest.fixture
+def make_cowrie_session():
+    def _make(
+        session_id: str = "sess1",
+        src_ip: str = "45.33.32.156",
+        login_attempts: list = None,
+        commands: list = None,
+    ):
+        return CowrieSession(
+            session_id=session_id,
+            src_ip=src_ip,
+            start_time=datetime(2026, 1, 15, 10, 30, 0, tzinfo=timezone.utc),
+            end_time=datetime(2026, 1, 15, 10, 32, 0, tzinfo=timezone.utc),
+            duration_ms=120000,
+            login_attempts=login_attempts or [],
+            commands=commands or [],
+        )
+    return _make
+
+@pytest.fixture
+def make_login_attempt():
+    def _make(session_id="sess1", username="root", password="123456",
+              success=True, timestamp=None):
+        return CowrieLoginAttempt(
+            source=LogSource.COWRIE,
+            timestamp=timestamp or datetime(2026, 1, 15, 10, 30, 5, tzinfo=timezone.utc),
+            raw="placeholder raw cowrie login line",
+            session_id=session_id,
+            username=username,
+            password=password,
+            success=success,
+        )
+    return _make
+
+@pytest.fixture
+def make_cowrie_command():
+    def _make(session_id="sess1", input="whoami", timestamp=None):
+        return CowrieCommand(
+            source=LogSource.COWRIE,
+            timestamp=timestamp or datetime(2026, 1, 15, 10, 30, 10, tzinfo=timezone.utc),
+            raw="placeholder raw cowrie command line",
+            session_id=session_id,
+            input=input,
+        )
     return _make

@@ -6,9 +6,8 @@ import json
 import os
 import sys
 from datetime import datetime, timezone
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, os.path.expanduser('~/project'))
 
 # ── Collectors ────────────────────────────────────────────────────────────────
 from logs.log_collector import (
@@ -26,8 +25,9 @@ from schemas.normalizer import (
 from schemas import (
     LogSource,
     AuditdEvent, AuthLogEvent, CloudTrailEvent,
-    Alert, AlertReport, CoverageSummary,
+    Alert, AlertReport, CoverageSummary, parse_cowrie_sessions
 )
+from storage.cowrie_store import init_db, store_session
 
 # ── Rules — auth.log ──────────────────────────────────────────────────────────
 from rules.rule_001_ssh_brute_force    import detect as rule_ssh_brute
@@ -48,8 +48,17 @@ from rules.rule_002_no_mfa_login       import detect as rule_no_mfa
 from rules.rule_006_root_account_login import detect as rule_root_login
 from rules.rule_009_cloudtrail_disabled import detect as rule_ct_disabled
 
+# ── Rules — Cowrie ──────────────────────────────────────────────────────────
+from rules.rule_015_cowrie_login import detect as rule_cowrie_login
+
 # ── State files ───────────────────────────────────────────────────────────────
-ALERTS_FILE = str(Path(__file__).resolve().parent.parent / "reports" / "alerts.json")
+ALERTS_FILE = os.path.expanduser('~/project/reports/alerts.json')
+
+# Real path inside the engine container — cowrie-var named volume mounted
+# read-only at /mnt/cowrie-data (see docker-compose.yml). Cowrie itself
+# writes to <volume_root>/log/cowrie/cowrie.json, so from engine's side
+# that's /mnt/cowrie-data/log/cowrie/cowrie.json.
+COWRIE_LOG_FILE = '/mnt/cowrie-data/log/cowrie/cowrie.json'
 
 
 # ── Alert persistence ─────────────────────────────────────────────────────────
@@ -108,10 +117,10 @@ def run_engine() -> AlertReport:
 
     new_alerts: list[Alert] = []
     parse_errors = 0
-    lines_processed = {"auth_log": 0, "auditd": 0, "cloudtrail": 0}
+    lines_processed = {"auth_log": 0, "auditd": 0, "cloudtrail": 0, "cowrie": 0}
 
     # ── auth.log ──────────────────────────────────────────────
-    print("\n[1/3] Processing auth.log...")
+    print("\n[1/4] Processing auth.log...")
     auth_raw_lines = collect_auth_logs()
     lines_processed["auth_log"] = len(auth_raw_lines)
 
@@ -138,7 +147,7 @@ def run_engine() -> AlertReport:
     print(f"  Brute force success:     {len(success_alerts)} alerts")
 
     # ── auditd ────────────────────────────────────────────────
-    print("\n[2/3] Processing auditd...")
+    print("\n[2/4] Processing auditd...")
     auditd_raw = collect_auditd_logs()
     lines_processed["auditd"] = len(auditd_raw.splitlines())
 
@@ -181,7 +190,7 @@ def run_engine() -> AlertReport:
     print(f"  Masquerading:             {len(masquerading_alerts)} alerts")
 
     # ── CloudTrail ────────────────────────────────────────────
-    print("\n[3/3] Processing CloudTrail...")
+    print("\n[3/4] Processing CloudTrail...")
     ct_raw = collect_cloudtrail_logs(BUCKET_NAME, ACCOUNT_ID, REGION)
     lines_processed["cloudtrail"] = len(ct_raw)
 
@@ -204,6 +213,27 @@ def run_engine() -> AlertReport:
     print(f"  No MFA:                  {len(mfa_alerts)} alerts")
     print(f"  Root login:              {len(root_alerts)} alerts")
     print(f"  CloudTrail disabled:     {len(ct_dis_alerts)} alerts")
+
+    # ── Cowrie ────────────────────────────────────────────────
+    print("\n[4/4] Processing Cowrie honeypot...")
+    init_db()
+
+    try:
+        cowrie_sessions = parse_cowrie_sessions(COWRIE_LOG_FILE)
+    except FileNotFoundError:
+        print(f"  [WARN] Cowrie log not found at {COWRIE_LOG_FILE} "
+              f"— is the cowrie-var volume mounted in this container?")
+        cowrie_sessions = []
+
+    lines_processed["cowrie"] = len(cowrie_sessions)
+
+    for session in cowrie_sessions:
+        store_session(session)
+
+    cowrie_login_alerts = rule_cowrie_login(cowrie_sessions)
+    new_alerts.extend(cowrie_login_alerts)
+    print(f"  New sessions: {len(cowrie_sessions)}")
+    print(f"  Cowrie honeypot logins:  {len(cowrie_login_alerts)} alerts")
 
     # ── Deduplicate + merge + save ────────────────────────────
     deduped_new = deduplicate_alerts(existing_alerts, new_alerts)
