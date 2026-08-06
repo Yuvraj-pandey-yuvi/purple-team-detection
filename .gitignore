@@ -7,3 +7,4 @@ reports/state.json
 reports/alerts.json
 reports/alerts.json.bak
 reports/latest_report.json
+*.pem
