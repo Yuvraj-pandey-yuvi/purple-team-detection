@@ -40,7 +40,7 @@ resource "aws_vpc_security_group_ingress_rule" "ssh" {
 
 resource "aws_vpc_security_group_ingress_rule" "cowrie_ssh_honeypot" {
   security_group_id = aws_security_group.purple_project_sg.id
-  description        = "cowrie honeypot ssh bait — deliberately open to all, this is the point"
+  description        = "cowrie honeypot ssh bait - deliberately open to all, this is the point"
   from_port          = 2222
   to_port             = 2222
   ip_protocol        = "tcp"
