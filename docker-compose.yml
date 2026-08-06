@@ -6,6 +6,11 @@ services:
       - ./reports:/app/reports
       - /var/log/auth.log:/var/log/auth.log:ro
       - /var/log/audit/audit.log:/var/log/audit/audit.log:ro
+      # Same named volume Cowrie writes to, mounted read-only here.
+      # engine gets log data, nothing more — no docker socket, no write
+      # access, no path into Cowrie's container. See cowrie service below
+      # for what Cowrie itself is locked down with.
+      - cowrie-var:/mnt/cowrie-data:ro
 
   dashboard:
     build: .
@@ -19,7 +24,9 @@ services:
     restart: unless-stopped
     build:
       context: ./honeypot/cowrie
-      dockerfile: docker/Dockerfile
+      dockerfile: ../cowrie-dockerfile.custom
+      args:
+          SETUPTOOLS_SCM_PRETEND_VERSION_FOR_COWRIE: "2.6.0"
     ports:
       - "2222:2222"
       - "2223:2223"
