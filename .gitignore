@@ -8,3 +8,4 @@ reports/alerts.json
 reports/alerts.json.bak
 reports/latest_report.json
 *.pem
+reports/cowrie.db

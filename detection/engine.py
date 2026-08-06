@@ -6,8 +6,9 @@ import json
 import os
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
-sys.path.insert(0, os.path.expanduser('~/project'))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 # ── Collectors ────────────────────────────────────────────────────────────────
 from logs.log_collector import (
@@ -52,7 +53,7 @@ from rules.rule_009_cloudtrail_disabled import detect as rule_ct_disabled
 from rules.rule_015_cowrie_login import detect as rule_cowrie_login
 
 # ── State files ───────────────────────────────────────────────────────────────
-ALERTS_FILE = os.path.expanduser('~/project/reports/alerts.json')
+ALERTS_FILE = str(Path(__file__).resolve().parent.parent / "reports" / "alerts.json")
 
 # Real path inside the engine container — cowrie-var named volume mounted
 # read-only at /mnt/cowrie-data (see docker-compose.yml). Cowrie itself
