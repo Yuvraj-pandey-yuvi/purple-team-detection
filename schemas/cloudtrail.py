@@ -16,7 +16,7 @@ Real CloudTrail record structure:
     "principalId": "AIDAVCX2MQYBU5QCZQYAT",
     "arn": "arn:aws:iam::349491201539:user/buddy",
     "accountId": "349491201539",
-    "accessKeyId": "ASIAVCX2MQYBZ65M6RDH",
+    "accessKeyId": "",
     "userName": "buddy",
     "sessionContext": {
       "attributes": {
