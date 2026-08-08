@@ -10,10 +10,14 @@ from schemas import (
 # matches an auditd path-watch rule in the first place).
 # 257=openat, 2=open, 82=rename, 86=link
 CRON_PATH_WRITE_SYSCALLS = {257, 2, 82, 86}
+#excluded auids
+EXCLUDED_AUIDS = {4294967295}
 def detect(events: list[AuditdEvent]) -> list[Alert]:
     alerts = []
 
     for event in events:
+        if event.auid in EXCLUDED_AUIDS:
+            continue
         if event.key != "cron_modification":
             continue
         if event.syscall is None:
