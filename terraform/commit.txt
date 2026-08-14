@@ -1,7 +1,0 @@
-feat(terraform): open NodePort 30080 for K3s dashboard, remove stale port 8000 rule
-
-- Dashboard now exposed via K3s NodePort Service (30080), not direct
-  container port mapping — port 8000 only reachable inside the cluster
-  network now, so the old external-facing rule is dead
-- Fix typo: security_group_id referenced wrong resource name
-  (purple_project -> purple_project_sg)
