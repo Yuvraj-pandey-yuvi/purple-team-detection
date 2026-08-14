@@ -20,13 +20,14 @@ resource "aws_security_group" "purple_project_sg" {
   # of dashboard/ssh access, and none of these fight each other on apply.
 }
 
-resource "aws_vpc_security_group_ingress_rule" "dashboard" {
-  security_group_id = aws_security_group.purple_project_sg.id
-  description        = "dashboard"
-  from_port          = 8000
-  to_port             = 8000
+
+resource "aws_vpc_security_group_ingress_rule" "dashboard_nodeport" {
+  security_group_id = aws_security_group.purple_project_sg.id   # reference your existing SG resource
+  from_port          = 30080
+  to_port            = 30080
   ip_protocol        = "tcp"
-  cidr_ipv4          = "0.0.0.0/0"
+  cidr_ipv4          = "0.0.0.0/0"                 # same open-to-internet pattern as your other rules
+  description        = "K3s NodePort - dashboard"
 }
 
 resource "aws_vpc_security_group_ingress_rule" "ssh" {
@@ -71,6 +72,7 @@ resource "aws_iam_role" "ec2_ssm_role" {
 
   description = "Allows EC2 instances to call AWS services on your behalf."
 }
+
 
 resource "aws_iam_instance_profile" "ec2_ssm_profile" {
   name = "ec2-ssm-role"

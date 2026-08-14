@@ -240,3 +240,12 @@ def get_all_blocked(db_path: Path = DB_PATH) -> list[dict]:
             "SELECT * FROM blocked_ips ORDER BY blocked_at DESC"
         ).fetchall()
         return [dict(r) for r in rows]
+def get_login_attempt_count(src_ip: str, db_path: Path = DB_PATH) -> int:
+    """Total login attempts across all sessions for an IP. Used to build
+    the auto-generated reason string when blocking."""
+    with _get_conn(db_path) as conn:
+        return conn.execute("""
+            SELECT COUNT(*) FROM session_logins sl
+            JOIN sessions s ON sl.session_id = s.session_id
+            WHERE s.src_ip = ?
+        """, (src_ip,)).fetchone()[0]

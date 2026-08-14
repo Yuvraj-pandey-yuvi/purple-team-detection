@@ -1,0 +1,128 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: engine-deployment                        # what should this be called?
+  labels:
+    app: engine
+spec:
+  replicas: 1                      # we already decided this — what, and why?
+  selector:
+    matchLabels:
+      app: engine                       # must match template labels below
+  template:
+    metadata:
+      labels:
+        app: engine
+    spec:
+      initContainers:
+        - name: seed-reports
+          image: ghcr.io/yuvraj-pandey-yuvi/purple-team-detection:v1   # same image — it already has the file
+          command: ["sh", "-c","cp -rn /app/reports/. /mnt/reports-pvc/"]        # what shell command copies files, and only if they don't already exist?
+          volumeMounts:
+            - name: reports
+              mountPath: /mnt/reports-pvc      # deliberately NOT /app/reports — why?
+      containers:
+        - name: engine
+          image: ghcr.io/yuvraj-pandey-yuvi/purple-team-detection:v1            # placeholder for now — we'll resolve real image strategy in 3.3
+          command: ["sh","detection/run_loop.sh"]   # what does this do, and why is it necessary?
+          resources:
+            requests:
+              memory: "100Mi"           # think about our 331Mi ceiling
+              cpu: "100m"
+            limits:
+              memory: "200Mi"
+              cpu: "300m"              # what happens if you don't set this, given tight RAM?
+          volumeMounts:
+            - name: reports
+              mountPath: /app/reports
+            - name: auth-log
+              mountPath: /var/log/auth.log
+              readOnly: true
+            - name: audit-log
+              mountPath: /var/log/audit/audit.log
+              readOnly: true
+            - name: cowrie-data
+              mountPath: /mnt/cowrie-data
+              readOnly: true
+      volumes:
+        - name: reports
+          persistentVolumeClaim:
+            claimName: reports-pvc            # references a PVC object we haven't written yet
+        - name: auth-log
+          hostPath:
+            path: /var/log/auth.log
+            type: File                # worth knowing: what does `type: File` actually do here?
+        - name: audit-log
+          hostPath:
+            path: /var/log/audit/audit.log
+            type: File
+        - name: cowrie-data
+          hostPath:
+            path: /var/lib/docker/volumes/project_cowrie-var/_data
+            type: Directory
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: reports-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
+  storageClassName: local-path      # K3s's default provisioner — worth specifying explicitly            
+  
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard-deployment
+  labels:
+    app: dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dashboard
+  template:
+    metadata:
+      labels:
+        app: dashboard
+    spec:
+      containers:
+        - name: dashboard
+          image: ghcr.io/yuvraj-pandey-yuvi/purple-team-detection:v1            # placeholder, resolved in 3.3
+          ports:
+            - containerPort: 8000   # what port does uvicorn actually listen on?
+          resources:
+            requests:
+              memory: "80Mi"
+              cpu: "50m"
+            limits:
+              memory: "150Mi"
+              cpu: "200m"
+          volumeMounts:
+            - name: reports
+              mountPath: /app/reports
+              readOnly: true
+      volumes:
+        - name: reports
+          persistentVolumeClaim:
+            claimName: reports-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dashboard-service
+spec:
+  type: NodePort                      # which type, given what we discussed?
+  selector:
+    app: dashboard                     # must match the Pod's label, not the Deployment's name
+  ports:
+    - port: 8000                  # the Service's own internal-facing port
+      targetPort: 8000            # where inside the Pod this actually goes
+      nodePort: 30080              # optional — omit to let K8s pick, or specify in 30000-32767 range
+
+
+

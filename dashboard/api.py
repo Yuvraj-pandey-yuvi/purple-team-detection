@@ -8,6 +8,15 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from pydantic import BaseModel
+from storage.cowrie_store import (
+    block_ip, unblock_ip, get_all_blocked,
+    get_sessions_by_ip, get_login_attempt_count,
+)
+class BlockRequest(BaseModel):
+    ip: str
+    reason: str | None = None
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -148,3 +157,30 @@ def health():
         'report_exists': report_exists,
         'timestamp':     datetime.now(timezone.utc).isoformat()
     }
+
+@app.post("/attackers/block")
+def block_attacker(req: BlockRequest):
+    sessions = get_sessions_by_ip(req.ip)
+    attempt_count = get_login_attempt_count(req.ip)
+
+    auto_reason = (
+        f"{len(sessions)} session(s), {attempt_count} login attempt(s) "
+        f"from {req.ip}"
+    )
+    final_reason = auto_reason
+    if req.reason:
+        final_reason = f"{auto_reason} | Note: {req.reason}"
+
+    block_ip(req.ip, final_reason, blocked_by="manual")
+    return {"status": "blocked", "ip": req.ip, "reason": final_reason}
+
+
+@app.post("/attackers/unblock")
+def unblock_attacker(ip: str):
+    unblock_ip(ip)
+    return {"status": "unblocked", "ip": ip}
+
+
+@app.get("/attackers/blocked")
+def list_blocked():
+    return get_all_blocked()
