@@ -34,11 +34,12 @@ from .base import BaseLogEvent, LogSource
 from .auditd import AuditdEvent
 from .auth_log import AuthLogEvent
 from .cloudtrail import CloudTrailEvent
+from .falco import FalcoEvent
 
 logger = logging.getLogger(__name__)
 
 # Type alias for the union of all event types
-LogEvent = Union[AuditdEvent, AuthLogEvent, CloudTrailEvent]
+LogEvent = Union[AuditdEvent, AuthLogEvent, CloudTrailEvent,FalcoEvent]
 
 # ── auditd grouping ───────────────────────────────────────────────────────────
 
@@ -136,6 +137,10 @@ def parse_raw_log(
             # CloudTrail lines from S3 are JSON objects
             record = json.loads(raw)
             return CloudTrailEvent.from_record(record)
+        elif source == LogSource.FALCO:
+            # Falco alerts from S3 are JSON objects, one per line
+            record = json.loads(raw)
+            return FalcoEvent.from_alert(record)
 
         else:
             logger.warning("Unknown log source: %s", source)

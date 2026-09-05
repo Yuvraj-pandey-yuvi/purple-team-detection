@@ -23,6 +23,7 @@ from .base import (
 from .auditd import AuditdEvent
 from .auth_log import AuthLogEvent
 from .cloudtrail import CloudTrailEvent
+from .falco import FalcoEvent
 from .cowrie import CowrieSession, CowrieLoginAttempt, CowrieCommand, parse_cowrie_sessions
 from .alert import (
     Alert,
