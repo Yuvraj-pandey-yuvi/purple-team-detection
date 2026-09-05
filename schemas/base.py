@@ -25,6 +25,7 @@ class LogSource(str, Enum):
     AUTH_LOG  = "auth_log"
     CLOUDTRAIL = "cloudtrail"
     COWRIE    = "cowrie"
+    FALCO= "falco"
 
 class Severity(str, Enum):
     """Severity levels used across all detection rules.
