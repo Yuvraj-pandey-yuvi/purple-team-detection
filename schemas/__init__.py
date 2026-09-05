@@ -45,7 +45,7 @@ __all__ = [
     # Enums
     "LogSource", "Severity", "ATTCKTechnique", "AttackSpeed",
     # Event models
-    "BaseLogEvent", "AuditdEvent", "AuthLogEvent", "CloudTrailEvent","CowrieSession", "CowrieLoginAttempt", "CowrieCommand",
+    "BaseLogEvent", "AuditdEvent", "AuthLogEvent", "CloudTrailEvent","CowrieSession", "CowrieLoginAttempt", "CowrieCommand","FalcoEvent",
     # Alert models
     "Alert", "AlertReport", "AttackerProfile", "UserActivity",
     "CoverageSummary", "TechniqueStatus", "TECHNIQUE_NAMES",

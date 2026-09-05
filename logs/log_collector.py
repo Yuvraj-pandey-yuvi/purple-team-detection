@@ -248,6 +248,100 @@ def collect_cloudtrail_logs(
 
     return events
 
+# ── Falco collector ──────────────────────────────────────────────────────────
+
+FALCO_BUCKET_NAME = 'purple-falco-logs-yuvraj2026'
+
+
+def collect_falco_logs(bucket_name: str) -> list[dict]:
+    """
+    Download and parse new Falco alert files from S3.
+
+    S3 layout (per-hostname, NOT one flat stream like CloudTrail):
+      falco/<hostname>/<date>/<time>.jsonl
+      e.g. falco/ip-172-31-38-178/2026-09-02/063001.jsonl
+
+    WHY PER-HOSTNAME TRACKING (not one global 'last_file' like CloudTrail):
+    Multiple nodes write independently. Comparing filenames across
+    DIFFERENT hostname prefixes alphabetically doesn't mean anything --
+    'ip-172-31-41-127/...' vs 'ip-172-31-38-178/...' sorts by IP string,
+    not by time. Track a dict instead: {hostname: last_seen_sortable_id}.
+
+    Returns:
+        list of raw Falco alert dicts (already json.loads'd) -- NOT yet
+        FalcoEvent objects. Engine passes these to FalcoEvent.from_alert()
+        in the normalizer, same handoff pattern as collect_cloudtrail_logs().
+    """
+    state = load_state()
+    last_files = state.get('falco_last_files', {})
+
+    local_dir = '/tmp/falco'
+    os.makedirs(local_dir, exist_ok=True)
+
+    # Sync the WHOLE falco/ prefix in one shot. We don't know hostnames
+    # in advance (nodes can be replaced, IPs change on restart), so
+    # syncing per-host doesn't make sense -- one sync call, then we
+    # discover hostnames from the resulting local directory structure.
+    subprocess.run(
+        ['aws', 's3', 'sync', f's3://{bucket_name}/falco/', local_dir],
+        capture_output=True,
+        text=True
+    )
+
+    events = []
+    updated_last_files = dict(last_files)  # working copy, mutated as we go
+
+    # Recursive glob -- '**' matches any depth of subdirectories, but
+    # ONLY if recursive=True is passed explicitly (glob.glob defaults
+    # to non-recursive even with '**' in the pattern -- an easy silent
+    # bug if you forget the flag: it would just silently match nothing
+    # nested and you'd never see an error, just zero files found).
+    jsonl_files = sorted(
+        glob.glob(f'{local_dir}/**/*.jsonl', recursive=True)
+    )
+
+    for filepath in jsonl_files:
+        # relpath gives us: 'ip-172-31-38-178/2026-09-02/063001.jsonl'
+        rel = os.path.relpath(filepath, local_dir)
+        parts = rel.split(os.sep)
+        hostname = parts[0]
+
+        # THE TRAP: if we tracked/compared just the bare filename
+        # ('063001.jsonl'), a file from 2026-09-02 would sort BEFORE a
+        # file from 2026-08-30 ('110501.jsonl') on pure string
+        # comparison, because '06' < '11' -- even though 09-02 is
+        # chronologically LATER. The fix: track date+time together as
+        # one string, e.g. '2026-09-02/063001.jsonl'. Since the date
+        # portion is YYYY-MM-DD (sorts correctly) and the time portion
+        # is HH MM SS with no separators (sorts correctly), the
+        # concatenated string sorts in true chronological order.
+        sortable_id = '/'.join(parts[1:])   # '2026-09-02/063001.jsonl'
+
+        host_last = last_files.get(hostname, '')
+        if sortable_id <= host_last:
+            continue
+
+        try:
+            with open(filepath) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    events.append(json.loads(line))
+            print(f"  Processed: {hostname}/{sortable_id}")
+        except json.JSONDecodeError:
+            print(f"  [WARN] Could not parse: {filepath}")
+            continue
+
+        if sortable_id > updated_last_files.get(hostname, ''):
+            updated_last_files[hostname] = sortable_id
+
+    if updated_last_files != last_files:
+        state['falco_last_files'] = updated_last_files
+        save_state(state)
+
+    return events
+
 
 # ── Entry point for manual testing ───────────────────────────────────────────
 
@@ -272,3 +366,5 @@ if __name__ == "__main__":
         print(f"  Sample: {ct_events[0].get('eventName')}")
 
     print("\nDone. Check ~/project/reports/state.json for positions.")
+
+    

@@ -15,7 +15,9 @@ from logs.log_collector import (
     collect_auth_logs,
     collect_auditd_logs,
     collect_cloudtrail_logs,
-    BUCKET_NAME, ACCOUNT_ID, REGION
+    collect_falco_logs,  
+    BUCKET_NAME, ACCOUNT_ID, REGION,
+    FALCO_BUCKET_NAME                       
 )
 
 # ── Normalizer ────────────────────────────────────────────────────────────────
@@ -25,7 +27,7 @@ from schemas.normalizer import (
 )
 from schemas import (
     LogSource,
-    AuditdEvent, AuthLogEvent, CloudTrailEvent,
+    AuditdEvent, AuthLogEvent, CloudTrailEvent,FalcoEvent,
     Alert, AlertReport, CoverageSummary, parse_cowrie_sessions
 )
 from storage.cowrie_store import init_db, store_session
@@ -119,10 +121,10 @@ def run_engine() -> AlertReport:
 
     new_alerts: list[Alert] = []
     parse_errors = 0
-    lines_processed = {"auth_log": 0, "auditd": 0, "cloudtrail": 0, "cowrie": 0}
+    lines_processed = {"auth_log": 0, "auditd": 0, "cloudtrail": 0, "cowrie": 0,"falco":0}
 
     # ── auth.log ──────────────────────────────────────────────
-    print("\n[1/4] Processing auth.log...")
+    print("\n[1/5] Processing auth.log...")
     auth_raw_lines = collect_auth_logs()
     lines_processed["auth_log"] = len(auth_raw_lines)
 
@@ -149,7 +151,7 @@ def run_engine() -> AlertReport:
     print(f"  Brute force success:     {len(success_alerts)} alerts")
 
     # ── auditd ────────────────────────────────────────────────
-    print("\n[2/4] Processing auditd...")
+    print("\n[2/5] Processing auditd...")
     auditd_raw = collect_auditd_logs()
     lines_processed["auditd"] = len(auditd_raw.splitlines())
 
@@ -192,7 +194,7 @@ def run_engine() -> AlertReport:
     print(f"  Masquerading:             {len(masquerading_alerts)} alerts")
 
     # ── CloudTrail ────────────────────────────────────────────
-    print("\n[3/4] Processing CloudTrail...")
+    print("\n[3/5] Processing CloudTrail...")
     ct_raw = collect_cloudtrail_logs(BUCKET_NAME, ACCOUNT_ID, REGION)
     lines_processed["cloudtrail"] = len(ct_raw)
 
@@ -220,7 +222,7 @@ def run_engine() -> AlertReport:
     print(f"  Canary crendtial used:   {len(canary_alerts)}alerts")
 
     # ── Cowrie ────────────────────────────────────────────────
-    print("\n[4/4] Processing Cowrie honeypot...")
+    print("\n[4/5] Processing Cowrie honeypot...")
     init_db()
 
     try:
@@ -240,6 +242,23 @@ def run_engine() -> AlertReport:
     print(f"  New sessions: {len(cowrie_sessions)}")
     print(f"  Cowrie honeypot logins:  {len(cowrie_login_alerts)} alerts")
 
+        # ── Falco ─────────────────────────────────────────────────
+    print("\n[5/5] Processing Falco...")
+    falco_raw = collect_falco_logs(FALCO_BUCKET_NAME)
+    lines_processed["falco"] = len(falco_raw)
+
+    falco_events: list[FalcoEvent] = []
+    for record in falco_raw:
+        try:
+            falco_events.append(FalcoEvent.from_alert(record))
+        except Exception:
+            parse_errors += 1
+
+    print(f"  New events: {len(falco_events)}")
+
+     # No custom Falco rules yet -- parsing only, proves the S3-poll
+    # -> FalcoEvent chain end-to-end. Rules + alerts.json entries
+    # come once custom ATT&CK-mapped Falco rules are written.
     # ── Deduplicate + merge + save ────────────────────────────
     deduped_new = deduplicate_alerts(existing_alerts, new_alerts)
     print(f"\n  New alerts: {len(new_alerts)} "
