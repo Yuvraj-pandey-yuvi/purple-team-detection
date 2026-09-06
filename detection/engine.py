@@ -260,7 +260,7 @@ def run_engine() -> AlertReport:
 
     print(f"  New events: {len(falco_events)}")
 
-         falco_default_alerts = rule_falco_passthrough(falco_events)
+    falco_default_alerts = rule_falco_passthrough(falco_events)
     new_alerts.extend(falco_default_alerts)
     print(f"  Default rule passthrough: {len(falco_default_alerts)} alerts")
     # ── Deduplicate + merge + save ────────────────────────────
