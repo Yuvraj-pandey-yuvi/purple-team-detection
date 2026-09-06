@@ -181,6 +181,7 @@ TECHNIQUE_NAMES: dict[ATTCKTechnique, str] = {
     ATTCKTechnique.T1562_002: "Impair Defenses: Disable CloudTrail",
     ATTCKTechnique.T1087_001: "Account Discovery: Local Account",
     ATTCKTechnique.T1082:     "System Information Discovery",
+    ATTCKTechnique.T1555:     "Credentials from password stores "
 }
 
 

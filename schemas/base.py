@@ -74,6 +74,7 @@ class ATTCKTechnique(str, Enum):
     T1087_001 = "T1087.001"   # Account Discovery: Local Account
     T1082     = "T1082"       # System Information Discovery
     T1548     = "T1548"       # Abuse Elevation Control (already exists)
+    T1555     = "T1555"       # Credentials from Password Stores
     
 
 

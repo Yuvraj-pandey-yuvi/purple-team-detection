@@ -52,8 +52,12 @@ from rules.rule_006_root_account_login import detect as rule_root_login
 from rules.rule_009_cloudtrail_disabled import detect as rule_ct_disabled
 from rules.rule_016_canary_credential_used import detect as rule_canary
 
+
 # ── Rules — Cowrie ──────────────────────────────────────────────────────────
 from rules.rule_015_cowrie_login import detect as rule_cowrie_login
+
+#------falco-rules--------------
+from rules.rule_017_falco_default_passthrough import detect as rule_falco_passthrough
 
 # ── State files ───────────────────────────────────────────────────────────────
 ALERTS_FILE = str(Path(__file__).resolve().parent.parent / "reports" / "alerts.json")
@@ -256,9 +260,9 @@ def run_engine() -> AlertReport:
 
     print(f"  New events: {len(falco_events)}")
 
-     # No custom Falco rules yet -- parsing only, proves the S3-poll
-    # -> FalcoEvent chain end-to-end. Rules + alerts.json entries
-    # come once custom ATT&CK-mapped Falco rules are written.
+         falco_default_alerts = rule_falco_passthrough(falco_events)
+    new_alerts.extend(falco_default_alerts)
+    print(f"  Default rule passthrough: {len(falco_default_alerts)} alerts")
     # ── Deduplicate + merge + save ────────────────────────────
     deduped_new = deduplicate_alerts(existing_alerts, new_alerts)
     print(f"\n  New alerts: {len(new_alerts)} "
