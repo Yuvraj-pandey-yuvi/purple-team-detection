@@ -1,0 +1,13 @@
+# Failed t3.micro Falco attempt -- OOMKilled repeatedly, see Phase 4 findings.
+# NOT the working kubeadm-lab config. Kept for the capacity-ceiling diagnosis.
+
+driver:
+  kind: modern_ebpf
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 150Mi
+  limits:
+    cpu: 1000m
+    memory: 300Mi
