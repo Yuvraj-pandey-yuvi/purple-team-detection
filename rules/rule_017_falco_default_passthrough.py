@@ -19,8 +19,9 @@ from schemas import (
 # Confirmed so far: T1555 from your own real shadow-read alert.
 KNOWN_FALCO_TECHNIQUES = {
     "T1555": ATTCKTechnique.T1555,
+    "T1548": ATTCKTechnique.T1548,
+    "T1053.003": ATTCKTechnique.T1053_003,
 }
-
 FALCO_PRIORITY_TO_SEVERITY = {
     "Emergency": Severity.CRITICAL,
     "Alert": Severity.CRITICAL,

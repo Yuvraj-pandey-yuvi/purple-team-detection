@@ -1,0 +1,60 @@
+# Custom Falco rules -- container/pod-layer detection, parallel to the
+# Python rules/ (host-layer) and sigma/ (portable format) directories.
+# Deployed to kubeadm-cluster-lab via Helm's customRules mechanism.
+
+- list: sudoers_paths
+  items: [/etc/sudoers]
+
+- macro: sudoers_dir
+  condition: (fd.directory=/etc/sudoers.d)
+
+- macro: sudoers_write
+  condition: >
+    open_write
+    and (fs.path.name in (sudoers_paths) or sudoers_dir)
+
+- rule: Sudoers File Modified
+  desc: >
+    Detect writes to /etc/sudoers or /etc/sudoers.d/* -- these files
+    control sudo privilege grants; a single appended line can grant an
+    attacker unrestricted root. No default Falco rule covers writes
+    to these paths (only reads, via "Read sensitive file untrusted").
+    Path resolves per the writing process's own mount namespace, so
+    this fires equally for host-level writes and any container's own
+    sudoers file, without needing separate host/container logic.
+  condition: sudoers_write
+  output: >
+    Sudoers file modified (file=%fs.path.name user=%user.name user_uid=%user.uid
+    process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname
+    command=%proc.cmdline container=%container.name container_id=%container.id
+    hostname=%evt.hostname terminal=%proc.tty)
+  priority: CRITICAL
+  tags: [host, container, filesystem, mitre_privilege_escalation, T1548]
+
+- list: cron_paths
+  items: [/etc/crontab]
+
+- macro: cron_dirs
+  condition: (fd.directory in (/etc/cron.d, /etc/cron.daily, /etc/cron.hourly, /etc/cron.weekly, /etc/cron.monthly, /var/spool/cron, /var/spool/cron/crontabs))
+
+- macro: cron_write
+  condition: >
+    open_write
+    and (fs.path.name in (cron_paths) or cron_dirs)
+
+- rule: Cron Persistence File Modified
+  desc: >
+    Detect writes to crontab or cron.d/spool locations -- a classic
+    persistence mechanism, scheduling a command to run repeatedly
+    without needing to maintain an active session. Falco's own
+    "Schedule Cron Jobs" rule is incubating-tier (not loaded by
+    default in a standard Helm install) and only checks /etc/cron*,
+    missing /var/spool/cron entirely.
+  condition: cron_write
+  output: >
+    Cron persistence file modified (file=%fs.path.name user=%user.name user_uid=%user.uid
+    process=%proc.name proc_exepath=%proc.exepath parent=%proc.pname
+    command=%proc.cmdline container=%container.name container_id=%container.id
+    hostname=%evt.hostname terminal=%proc.tty)
+  priority: CRITICAL
+  tags: [host, container, filesystem, mitre_persistence, T1053.003]
