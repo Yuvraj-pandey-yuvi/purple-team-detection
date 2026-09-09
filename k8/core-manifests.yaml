@@ -24,6 +24,7 @@ spec:
       containers:
         - name: engine
           image: ghcr.io/yuvraj-pandey-yuvi/purple-team-detection:v1            # placeholder for now — we'll resolve real image strategy in 3.3
+          imagePullPolicy: Always
           command: ["sh","detection/run_loop.sh"]   # what does this do, and why is it necessary?
           resources:
             requests:
