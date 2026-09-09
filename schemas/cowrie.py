@@ -83,21 +83,36 @@ def _parse_ts(raw_ts: str) -> datetime:
     return datetime.fromisoformat(raw_ts.replace("Z", "+00:00"))
 
 
-def parse_cowrie_sessions(jsonlog_path: str) -> list[CowrieSession]:
-    """Read a Cowrie cowrie.json (JSON Lines) file and return one
-    CowrieSession per distinct "session" id found in the file.
+def parse_cowrie_sessions(lines: list[str]) -> list[CowrieSession]:
+    """Parse a batch of raw Cowrie JSON lines into one CowrieSession per
+    distinct "session" id found in the batch.
+
+    Takes lines directly (not a file path) so the caller can supply only
+    NEW lines from incremental reading (log_collector.read_new_lines),
+    not the whole file re-read from scratch every run. A returned
+    CowrieSession here may be PARTIAL -- e.g. missing end_time if this
+    particular batch doesn't include that session's close event yet.
+    storage/cowrie_store.py's store_session() now correctly merges
+    partial sessions across multiple calls (real upsert, not just
+    idempotent-insert) rather than requiring a complete session in one
+    shot, which the old full-file-per-run design implicitly relied on.
+
+    src_ip is safe to pull from events[0] regardless of which event type
+    happens to start a given batch -- confirmed against real captured
+    data that every Cowrie event type (connect, client.version, kex,
+    closed, login.success, direct-tcpip.request) carries src_ip, not
+    just session.connect specifically.
     """
     sessions_raw: dict[str, list[dict]] = defaultdict(list)
 
-    with open(jsonlog_path) as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            event = json.loads(line)
-            session_id = event.get("session")
-            if session_id:
-                sessions_raw[session_id].append(event)
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        event = json.loads(line)
+        session_id = event.get("session")
+        if session_id:
+            sessions_raw[session_id].append(event)
 
     sessions: list[CowrieSession] = []
 

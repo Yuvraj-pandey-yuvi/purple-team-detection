@@ -248,6 +248,20 @@ def collect_cloudtrail_logs(
 
     return events
 
+#-------cowrie-collector---------------------------------------------------------
+def collect_cowrie_logs(filepath: str) -> list[str]:
+    """
+    Read only NEW lines from Cowrie's cowrie.json since the last run --
+    same byte-offset/rotation-safe pattern as collect_auth_logs(), via
+    the shared read_new_lines() helper. Replaces the old full-file
+    re-read every run, which OOM'd once the file grew past ~70MB
+    (rotation had silently stopped -- see Phase 4 findings).
+    """
+    return read_new_lines(
+        filepath=filepath,
+        state_key='cowrie_position'
+    )
+
 # ── Falco collector ──────────────────────────────────────────────────────────
 
 FALCO_BUCKET_NAME = 'purple-falco-logs-yuvraj2026'

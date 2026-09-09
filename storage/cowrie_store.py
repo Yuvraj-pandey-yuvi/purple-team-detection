@@ -89,6 +89,15 @@ def init_db(db_path: Path = DB_PATH) -> None:
                 timestamp   TEXT NOT NULL
             );
 
+            -- Added for the incremental-reading fix: CREATE UNIQUE INDEX
+            -- (not an inline column constraint) works even though this
+            -- table already exists with real data -- an inline constraint
+            -- on CREATE TABLE would be silently skipped by IF NOT EXISTS.
+            -- Lets INSERT OR IGNORE dedupe per real event instead of the
+            -- old all-or-nothing "already_have_children" gate.
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_logins_unique
+                ON session_logins(session_id, timestamp, username);
+
             CREATE INDEX IF NOT EXISTS idx_logins_session_id
                 ON session_logins(session_id);
 
@@ -98,6 +107,9 @@ def init_db(db_path: Path = DB_PATH) -> None:
                 command_text  TEXT NOT NULL,
                 ran_at        TEXT NOT NULL
             );
+
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_commands_unique
+                ON session_commands(session_id, ran_at, command_text);
 
             CREATE INDEX IF NOT EXISTS idx_commands_session_id
                 ON session_commands(session_id);
@@ -120,14 +132,34 @@ def init_db(db_path: Path = DB_PATH) -> None:
 def store_session(session: CowrieSession, db_path: Path = DB_PATH) -> None:
     """
     Persist one CowrieSession (+ its login attempts + commands).
-    INSERT OR IGNORE on session_id — idempotent, safe to call on every
-    engine run even if the session was already stored.
+
+    Real upsert, not just idempotent-insert -- a session can now arrive
+    PARTIAL across multiple engine runs, since Cowrie log reading is
+    incremental (run 1 might see connect+login, run 2 sees commands+close,
+    same session_id). end_time/duration_ms take the newest non-NULL value
+    via COALESCE (prefers the incoming value, falls back to whatever's
+    already stored if the incoming batch didn't include a close event).
+    src_ip/start_time are deliberately NOT updated on conflict -- every
+    real Cowrie event carries src_ip (confirmed against real captured
+    data: connect, client.version, kex, closed, login.success,
+    direct-tcpip.request all have it), so the first-seen value is already
+    correct; start_time is set once, at session start, by definition.
+
+    Children (logins/commands) use INSERT OR IGNORE against the new
+    UNIQUE indexes -- correctly skips exact re-processed duplicates while
+    still inserting genuinely NEW rows arriving in a later run for the
+    same session_id. Replaces the old "already_have_children" gate, which
+    silently dropped ALL new children once ANY child existed for that
+    session -- the actual root cause of the data-loss risk under
+    incremental reading.
     """
     with _get_conn(db_path) as conn:
         conn.execute("""
-            INSERT OR IGNORE INTO sessions
-                (session_id, src_ip, start_time, end_time, duration_ms)
+            INSERT INTO sessions (session_id, src_ip, start_time, end_time, duration_ms)
             VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(session_id) DO UPDATE SET
+                end_time    = COALESCE(excluded.end_time, sessions.end_time),
+                duration_ms = COALESCE(excluded.duration_ms, sessions.duration_ms)
         """, (
             session.session_id,
             session.src_ip,
@@ -136,36 +168,29 @@ def store_session(session: CowrieSession, db_path: Path = DB_PATH) -> None:
             session.duration_ms,
         ))
 
-        already_have_children = conn.execute(
-            "SELECT 1 FROM session_logins WHERE session_id = ? LIMIT 1",
-            (session.session_id,)
-        ).fetchone()
+        for attempt in session.login_attempts:
+            conn.execute("""
+                INSERT OR IGNORE INTO session_logins
+                    (session_id, username, password, success, timestamp)
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                session.session_id,
+                attempt.username,
+                attempt.password,
+                1 if attempt.success else 0,
+                attempt.timestamp.isoformat(),
+            ))
 
-        if already_have_children is None:
-            for attempt in session.login_attempts:
-                conn.execute("""
-                    INSERT INTO session_logins
-                        (session_id, username, password, success, timestamp)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (
-                    session.session_id,
-                    attempt.username,
-                    attempt.password,
-                    1 if attempt.success else 0,
-                    attempt.timestamp.isoformat(),
-                ))
-
-            for cmd in session.commands:
-                conn.execute("""
-                    INSERT INTO session_commands
-                        (session_id, command_text, ran_at)
-                    VALUES (?, ?, ?)
-                """, (
-                    session.session_id,
-                    cmd.input,
-                    cmd.timestamp.isoformat(),
-                ))
-
+        for cmd in session.commands:
+            conn.execute("""
+                INSERT OR IGNORE INTO session_commands
+                    (session_id, command_text, ran_at)
+                VALUES (?, ?, ?)
+            """, (
+                session.session_id,
+                cmd.input,
+                cmd.timestamp.isoformat(),
+            ))
 
 def get_sessions_by_ip(src_ip: str, db_path: Path = DB_PATH) -> list[dict]:
     """Phase 5 correlation entry point — indexed lookup via idx_sessions_src_ip."""
