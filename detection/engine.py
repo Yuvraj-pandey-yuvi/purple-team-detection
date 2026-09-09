@@ -16,6 +16,7 @@ from logs.log_collector import (
     collect_auditd_logs,
     collect_cloudtrail_logs,
     collect_falco_logs,  
+    collect_cowrie_logs,
     BUCKET_NAME, ACCOUNT_ID, REGION,
     FALCO_BUCKET_NAME                       
 )
@@ -225,27 +226,26 @@ def run_engine() -> AlertReport:
     print(f"  CloudTrail disabled:     {len(ct_dis_alerts)} alerts")
     print(f"  Canary crendtial used:   {len(canary_alerts)}alerts")
 
-    # ── Cowrie ────────────────────────────────────────────────
+        # ── Cowrie ────────────────────────────────────────────────
     print("\n[4/5] Processing Cowrie honeypot...")
     init_db()
 
-    try:
-        cowrie_sessions = parse_cowrie_sessions(COWRIE_LOG_FILE)
-    except FileNotFoundError:
-        print(f"  [WARN] Cowrie log not found at {COWRIE_LOG_FILE} "
-              f"— is the cowrie-var volume mounted in this container?")
-        cowrie_sessions = []
+    cowrie_raw_lines = collect_cowrie_logs(COWRIE_LOG_FILE)
+    lines_processed["cowrie"] = len(cowrie_raw_lines)
 
-    lines_processed["cowrie"] = len(cowrie_sessions)
+    try:
+        cowrie_sessions = parse_cowrie_sessions(cowrie_raw_lines)
+    except Exception:
+        parse_errors += 1
+        cowrie_sessions = []
 
     for session in cowrie_sessions:
         store_session(session)
 
     cowrie_login_alerts = rule_cowrie_login(cowrie_sessions)
     new_alerts.extend(cowrie_login_alerts)
-    print(f"  New sessions: {len(cowrie_sessions)}")
+    print(f"  New/updated sessions: {len(cowrie_sessions)}")
     print(f"  Cowrie honeypot logins:  {len(cowrie_login_alerts)} alerts")
-
         # ── Falco ─────────────────────────────────────────────────
     print("\n[5/5] Processing Falco...")
     falco_raw = collect_falco_logs(FALCO_BUCKET_NAME)
