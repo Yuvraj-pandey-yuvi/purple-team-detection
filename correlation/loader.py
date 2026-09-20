@@ -130,7 +130,23 @@ def _handle_parse_error(index: int, raw_entry: dict, error: Exception) -> None:
 
 
 if __name__ == "__main__":
-    # TODO: quick manual smoke test — load and print count of alerts
-    # parsed successfully vs skipped, before wiring this into the
-    # rest of the correlation pipeline.
-    pass
+    print(f"Reading from: {ALERTS_PATH}")
+    print(f"Errors will be logged to: {ERROR_LOG_PATH}\n")
+
+    alerts = load_alerts()
+
+    print(f"\nLoaded {len(alerts)} valid alerts.")
+
+    if alerts:
+        from collections import Counter
+        by_rule = Counter(a.rule_id for a in alerts)
+        print("\nBy rule_id:")
+        for rule_id, count in sorted(by_rule.items()):
+            print(f"  {rule_id}: {count}")
+
+        print("\nSample alert (first one loaded):")
+        print(alerts[0].model_dump_json(indent=2))
+    else:
+        print("\n[WARN] Zero alerts loaded — check that alerts.json "
+              "actually exists and has content at the path above "
+              "before assuming something's broken.")

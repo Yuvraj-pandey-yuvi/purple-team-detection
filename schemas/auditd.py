@@ -78,7 +78,7 @@ class AuditdEvent(BaseLogEvent):
 
     record_type: str = Field(default="SYSCALL",
                              description="SYSCALL, PATH, EXECVE, etc.")
-─────────────────────────────
+# ─────────────────────────────
     @property
     def is_privileged_escalation(self) -> bool:
         """True when a non-root user's process runs as root.
