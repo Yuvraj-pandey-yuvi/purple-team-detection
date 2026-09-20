@@ -9,3 +9,7 @@ reports/alerts.json.bak
 reports/latest_report.json
 *.pem
 reports/cowrie.db
+
+# Correlation engine runtime artifacts — logs and error files, not source
+correlation/correlation_errors.log
+correlation/archive.json
