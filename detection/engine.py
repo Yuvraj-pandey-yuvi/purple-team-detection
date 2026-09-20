@@ -7,6 +7,7 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+import fcntl
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -75,24 +76,42 @@ COWRIE_LOG_FILE = '/mnt/cowrie-data/log/cowrie/cowrie.json'
 def load_existing_alerts() -> list[Alert]:
     if not os.path.exists(ALERTS_FILE):
         return []
-    try:
-        with open(ALERTS_FILE) as f:
-            raw = json.load(f)
-        return [Alert(**a) for a in raw]
-    except (json.JSONDecodeError, Exception) as e:
-        print(f"  [WARN] Could not load alerts.json: {e}")
-        return []
+
+    with open(ALERTS_FILE) as f:
+        fcntl.flock(f.fileno(), fcntl.LOCK_SH)   # NEW — block until safe to read
+        try:
+            try:
+                raw = json.load(f)
+            except json.JSONDecodeError as e:
+                print(f"  [WARN] alerts.json is not valid JSON: {e}")
+                return []
+        finally:
+            fcntl.flock(f.fileno(), fcntl.LOCK_UN)   # NEW — always release
+
+    alerts: list[Alert] = []
+    for i, entry in enumerate(raw):
+        try:
+            alerts.append(Alert.model_validate(entry))
+        except Exception as e:
+            print(f"  [WARN] Skipped malformed alert at index {i}: {e}")
+
+    return alerts
 
 
 def save_alerts(alerts: list[Alert]) -> None:
     os.makedirs(os.path.dirname(ALERTS_FILE), exist_ok=True)
     with open(ALERTS_FILE, "w") as f:
-        json.dump(
+        fcntl.flock(f.fileno(),fcntl.LOCK_EX)
+        try:
+            json.dump(
             [a.model_dump(mode="json") for a in alerts],
             f,
             indent=2,
             default=str
-        )
+            )
+        finally:
+            fcntl.flock(f.fileno(),fcntl.LOCK_UN)
+        
 
 
 # ── Deduplication ─────────────────────────────────────────────────────────────
