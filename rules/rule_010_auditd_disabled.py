@@ -42,6 +42,7 @@ def detect(events: list[AuditdEvent]) -> list[Alert]:
             severity    = severity,
             timestamp   = datetime.now(timezone.utc),
             first_seen  = event.timestamp,
+            auid        = event.auid,
             dedup_key=f"{event.exe}:{event.auid}:{event.key}",
             log_source  = LogSource.AUDITD,
             description = (
