@@ -97,6 +97,7 @@ def detect(events: list[AuditdEvent]) -> list[Alert]:
                 severity    = Severity.CRITICAL,
                 timestamp   = datetime.now(timezone.utc),
                 first_seen  = event.timestamp,
+                auid        = event.auid,
                 log_source  = LogSource.AUDITD,
                 description = (
                     f"Process claims to be sensitive service "
