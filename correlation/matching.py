@@ -158,6 +158,105 @@ def find_nearest_preceding_match(
     return max(valid_candidates, key=lambda a: a.timestamp)
 
 
+def _make_synthetic_alert(
+    rule_id: str,
+    timestamp,
+    auid: Optional[int] = None,
+    username: Optional[str] = None,
+) -> Alert:
+    """Build a minimal, valid Alert for testing matching logic in
+    isolation, without needing real alerts.json data. Fills in
+    whatever required fields Alert needs with harmless placeholder
+    values — only rule_id/timestamp/auid/username actually matter
+    for what find_nearest_preceding_match() looks at.
+    """
+    from schemas import ATTCKTechnique, Severity, LogSource
+    return Alert(
+        rule_id=rule_id,
+        technique=ATTCKTechnique.T1053_003,   # placeholder, not checked by matching
+        severity=Severity.HIGH,
+        timestamp=timestamp,
+        auid=auid,
+        username=username,
+        dedup_key=f"synthetic:{rule_id}:{timestamp.isoformat()}",
+        log_source=LogSource.AUDITD,
+        description="synthetic test alert",
+    )
+
+
+def _run_synthetic_matching_test() -> None:
+    """
+    Proves find_nearest_preceding_match() works correctly using
+    hand-built alerts with KNOWN, controlled timestamps and identities
+    — independent of whether real production alerts.json has caught
+    up with the auid= fix yet (Path B, per project decision).
+
+    Three cases:
+      1. A valid match WITHIN the window — should succeed.
+      2. A candidate OUTSIDE the window — should return None.
+      3. No candidate at all for that identity — should return None.
+    """
+    from datetime import datetime, timezone
+
+    print("=" * 60)
+    print("SYNTHETIC MATCHING TEST (controlled, not real alerts.json)")
+    print("=" * 60)
+
+    anchor_time = datetime(2026, 1, 1, 15, 0, tzinfo=timezone.utc)  # 3:00 PM
+
+    # Case 1: valid match, 40 minutes before anchor, same identity (auid=1000 -> "ubuntu")
+    candidate_good = _make_synthetic_alert(
+        rule_id="rule_007_brute_force_success",
+        timestamp=anchor_time.replace(hour=14, minute=20),  # 2:20 PM
+        username="ubuntu",
+    )
+
+    # Case 2: same identity, same rule_id, but OUTSIDE the 2-hour window
+    candidate_too_old = _make_synthetic_alert(
+        rule_id="rule_007_brute_force_success",
+        timestamp=anchor_time.replace(hour=12, minute=0),  # 12:00 PM — 3 hours before
+        username="ubuntu",
+    )
+
+    anchor = _make_synthetic_alert(
+        rule_id="rule_008_cron_persistence",
+        timestamp=anchor_time,
+        auid=1000,  # resolves to "ubuntu" via real /etc/passwd
+    )
+
+    uid_cache: dict[int, str] = {}
+    username_index, _ = build_indices([anchor, candidate_good, candidate_too_old])
+
+    result = find_nearest_preceding_match(
+        anchor, "rule_007_brute_force_success", username_index, uid_cache
+    )
+    print(f"\nCase 1+2 combined (good match exists, along with a too-old one):")
+    print(f"  Matched: {result.dedup_key if result else None}")
+    assert result is not None, "Expected a match, got None"
+    assert result.dedup_key == candidate_good.dedup_key, (
+        f"Matched the WRONG alert — got {result.dedup_key}, "
+        f"expected the 2:20 PM one, not the 12:00 PM one"
+    )
+    print("  PASS — matched the nearer (2:20 PM) candidate, correctly "
+          "ignored the too-old (12:00 PM) one")
+
+    # Case 3: no candidate at all for a different identity
+    lonely_anchor = _make_synthetic_alert(
+        rule_id="rule_008_cron_persistence",
+        timestamp=anchor_time,
+        auid=999999,  # doesn't resolve to anyone real
+    )
+    result = find_nearest_preceding_match(
+        lonely_anchor, "rule_007_brute_force_success", username_index, uid_cache
+    )
+    print(f"\nCase 3 (anchor's identity can't even be resolved):")
+    print(f"  Matched: {result}")
+    assert result is None, "Expected None for an unresolvable identity"
+    print("  PASS — correctly returned None")
+
+    print("\nAll synthetic matching tests passed.")
+
+
 if __name__ == "__main__":
     from correlation.loader import load_alerts
 
@@ -187,3 +286,6 @@ if __name__ == "__main__":
     if unindexed:
         from collections import Counter
         print("By rule_id:", dict(Counter(a.rule_id for a in unindexed)))
+
+    print()
+    _run_synthetic_matching_test()
