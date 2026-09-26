@@ -14,6 +14,7 @@
 #   - Direct alert-to-alert comparison only (see GraphWeaver discussion
 #     in decisions-and-learnings.md) — no separate entity-graph model.
 
+from datetime import timedelta
 from typing import Optional
 from schemas import Alert
 from correlation.identity import resolve_uid_to_username
@@ -89,6 +90,72 @@ def build_indices(
     username_index = build_username_index(alerts, uid_cache)
     source_ip_index = build_source_ip_index(alerts)
     return username_index, source_ip_index
+
+
+# ── Correlation config — explicitly author-defined, never inferred ─────────
+# Each entry: (anchor_rule_id, candidate_rule_id).
+# The anchor is the "later" alert (e.g. rule_008 cron persistence); the
+# candidate is what we search BACKWARD for (e.g. rule_007 breach).
+CORRELATION_WINDOW_HOURS = 2
+
+CORRELATION_PAIRS: list[tuple[str, str]] = [
+    ("rule_008_cron_persistence", "rule_007_brute_force_success"),
+    # TODO: add more pairs as you wire more rules in, e.g.:
+    # ("rule_008_cron_persistence", "rule_001_..."),  # the "attempts only" fallback tier
+]
+
+
+def get_identity(alert: Alert, uid_cache: dict[int, str]) -> Optional[str]:
+    """
+    Resolve a single alert's identity to a username — same logic as
+    build_username_index() uses per-alert, but callable standalone for
+    a single anchor alert rather than the whole list.
+    """
+    if alert.username is not None:
+        return alert.username
+    if alert.auid is not None:
+        return resolve_uid_to_username(alert.auid, uid_cache)
+    return None
+
+
+def find_nearest_preceding_match(
+    anchor: Alert,
+    candidate_rule_id: str,
+    username_index: dict[str, list[Alert]],
+    uid_cache: dict[int, str],
+    window_hours: float = CORRELATION_WINDOW_HOURS,
+) -> Optional[Alert]:
+    """
+    Given an anchor alert, find the nearest-preceding alert of
+    `candidate_rule_id` for the SAME resolved identity, within
+    `window_hours` before the anchor's own timestamp.
+
+    Returns None if:
+      - the anchor's own identity can't be resolved at all (nothing
+        to search by)
+      - no candidate alerts exist for that identity
+      - candidates exist for that identity, but none are BOTH the
+        right rule_id AND within the time window before the anchor
+    """
+    identity = get_identity(anchor, uid_cache)
+    if identity is None:
+        return None  # no identity to search by — can't match at all
+
+    same_person_alerts = username_index.get(identity, [])
+
+    window = timedelta(hours=window_hours)
+
+    valid_candidates = [
+        alert for alert in same_person_alerts
+        if alert.rule_id == candidate_rule_id
+        and alert.timestamp < anchor.timestamp
+        and (anchor.timestamp - alert.timestamp) <= window
+    ]
+
+    if not valid_candidates:
+        return None
+
+    return max(valid_candidates, key=lambda a: a.timestamp)
 
 
 if __name__ == "__main__":
