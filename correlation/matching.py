@@ -165,6 +165,28 @@ class GroupMatch(NamedTuple):
     candidate_rule_id: str
 
 
+# Severity is a str Enum — naive max()/sort on the values compares
+# ALPHABETICALLY ("CRITICAL" < "HIGH" alphabetically, backwards from
+# actual severity meaning), not by real severity rank. Explicit
+# ranking required whenever comparing across Severity values.
+SEVERITY_ORDER = {
+    Severity.INFO: 0,
+    Severity.LOW: 1,
+    Severity.MEDIUM: 2,
+    Severity.HIGH: 3,
+    Severity.CRITICAL: 4,
+}
+
+
+def highest_severity(severities: list[Severity]) -> Severity:
+    """
+    Given multiple severities (e.g. from several independently-matched
+    groups on one anchor), return the single highest one — by real
+    severity rank, NOT Python's default string comparison.
+    """
+    return max(severities, key=lambda s: SEVERITY_ORDER[s])
+
+
 class AnchorMatches(NamedTuple):
     """
     ALL matched groups for one anchor alert, combined. Stage 4 builds
