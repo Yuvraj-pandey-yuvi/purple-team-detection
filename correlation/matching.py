@@ -15,9 +15,10 @@
 #     in decisions-and-learnings.md) — no separate entity-graph model.
 
 from datetime import timedelta
-from typing import Optional
-from schemas import Alert
+from typing import Optional, NamedTuple
+from schemas import Alert, Severity
 from correlation.identity import resolve_uid_to_username
+from correlation.correlation_rules import CORRELATION_RULES
 
 
 def build_username_index(alerts: list[Alert], uid_cache: dict[int, str]) -> dict[str, list[Alert]]:
@@ -79,30 +80,25 @@ def build_source_ip_index(alerts: list[Alert]) -> dict[str, list[Alert]]:
 
 def build_indices(
     alerts: list[Alert],
-) -> tuple[dict[str, list[Alert]], dict[str, list[Alert]]]:
+) -> tuple[dict[str, list[Alert]], dict[str, list[Alert]], dict[int, str]]:
     """
     Convenience wrapper — builds both indices in one call, sharing one
     uid_cache across the whole run (per Stage 2's per-run caching design).
 
-    Returns (username_index, source_ip_index).
+    Returns (username_index, source_ip_index, uid_cache) — the cache
+    is returned too so callers outside index-building (like the
+    orchestration loop below) can keep reusing it, rather than each
+    silently re-resolving auids that were already resolved once here.
     """
     uid_cache: dict[int, str] = {}
     username_index = build_username_index(alerts, uid_cache)
     source_ip_index = build_source_ip_index(alerts)
-    return username_index, source_ip_index
+    return username_index, source_ip_index, uid_cache
 
 
-# ── Correlation config — explicitly author-defined, never inferred ─────────
-# Each entry: (anchor_rule_id, candidate_rule_id).
-# The anchor is the "later" alert (e.g. rule_008 cron persistence); the
-# candidate is what we search BACKWARD for (e.g. rule_007 breach).
+# ── Correlation window — a Stage 3 matching parameter, distinct from
+# WHICH rules relate (that lives in correlation_rules.py) ─────────────
 CORRELATION_WINDOW_HOURS = 2
-
-CORRELATION_PAIRS: list[tuple[str, str]] = [
-    ("rule_008_cron_persistence", "rule_007_brute_force_success"),
-    # TODO: add more pairs as you wire more rules in, e.g.:
-    # ("rule_008_cron_persistence", "rule_001_..."),  # the "attempts only" fallback tier
-]
 
 
 def get_identity(alert: Alert, uid_cache: dict[int, str]) -> Optional[str]:
@@ -156,6 +152,81 @@ def find_nearest_preceding_match(
         return None
 
     return max(valid_candidates, key=lambda a: a.timestamp)
+
+
+class GroupMatch(NamedTuple):
+    """
+    One matched group for an anchor — which candidate alert it found
+    (the winner within that group's fallback tiers), the severity that
+    tier earns, and which specific rule_id actually matched.
+    """
+    matched: Alert
+    severity: Severity
+    candidate_rule_id: str
+
+
+class AnchorMatches(NamedTuple):
+    """
+    ALL matched groups for one anchor alert, combined. Stage 4 builds
+    ONE CorrelatedIncident from this — not one per matched group —
+    since matched groups together tell one combined story about the
+    same anchor (e.g. both "breach preceded this" AND "persistence
+    account also created").
+    """
+    anchor: Alert
+    group_matches: list[GroupMatch]
+
+
+def run_correlation(
+    alerts: list[Alert],
+) -> list[AnchorMatches]:
+    """
+    The real orchestration loop, group-aware.
+
+    For every alert whose rule_id has entries in CORRELATION_RULES:
+      - for EACH group configured for that anchor rule (groups are
+        independent — all are checked, regardless of other groups'
+        results):
+          - try each (candidate_rule_id, severity) tier within that
+            group, in order — first successful match wins THAT group,
+            stop trying weaker tiers within it
+      - if at least one group produced a match, emit ONE AnchorMatches
+        combining every group that matched
+      - if ZERO groups matched, emit nothing for this anchor at all
+        (per the earlier design decision — only alerts that ARE part
+        of a chain get surfaced in the correlation display window)
+    """
+    username_index, _source_ip_index, uid_cache = build_indices(alerts)
+
+    results: list[AnchorMatches] = []
+
+    for alert in alerts:
+        groups = CORRELATION_RULES.get(alert.rule_id)
+        if not groups:
+            continue  # this alert's rule isn't configured as an anchor at all
+
+        matched_groups: list[GroupMatch] = []
+
+        for group in groups:
+            for candidate_rule_id, severity in group:
+                match = find_nearest_preceding_match(
+                    anchor=alert,
+                    candidate_rule_id=candidate_rule_id,
+                    username_index=username_index,
+                    uid_cache=uid_cache,
+                )
+                if match is not None:
+                    matched_groups.append(GroupMatch(
+                        matched=match,
+                        severity=severity,
+                        candidate_rule_id=candidate_rule_id,
+                    ))
+                    break  # first successful tier wins WITHIN this group
+
+        if matched_groups:
+            results.append(AnchorMatches(anchor=alert, group_matches=matched_groups))
+
+    return results
 
 
 def _make_synthetic_alert(
@@ -224,8 +295,7 @@ def _run_synthetic_matching_test() -> None:
         auid=1000,  # resolves to "ubuntu" via real /etc/passwd
     )
 
-    uid_cache: dict[int, str] = {}
-    username_index, _ = build_indices([anchor, candidate_good, candidate_too_old])
+    username_index, _, uid_cache = build_indices([anchor, candidate_good, candidate_too_old])
 
     result = find_nearest_preceding_match(
         anchor, "rule_007_brute_force_success", username_index, uid_cache
@@ -255,6 +325,104 @@ def _run_synthetic_matching_test() -> None:
     print("  PASS — correctly returned None")
 
     print("\nAll synthetic matching tests passed.")
+
+
+def _run_synthetic_orchestration_test() -> None:
+    """
+    Proves run_correlation() correctly handles groups:
+      1. Within a group, first-match-wins (rule_007 beats rule_001).
+      2. ACROSS groups, matches are COMBINED into one AnchorMatches,
+         not treated as competing — if Group 2 (persistence account)
+         is enabled, a rule_008 anchor matching BOTH the breach group
+         AND the persistence-account group should produce ONE
+         AnchorMatches with TWO group_matches, not two separate results.
+
+    NOTE: this test temporarily adds a Group 2 into CORRELATION_RULES
+    at runtime, since the real config currently has it commented out
+    — proves the group-combining logic works even though it's not
+    live in production config yet.
+    """
+    from datetime import datetime, timezone
+    import correlation.correlation_rules as cr
+
+    print("\n" + "=" * 60)
+    print("SYNTHETIC ORCHESTRATION TEST (run_correlation, groups)")
+    print("=" * 60)
+
+    # Temporarily enable a second, independent group for this test only
+    original_rules = cr.CORRELATION_RULES
+    cr.CORRELATION_RULES = {
+        "rule_008_cron_persistence": [
+            [
+                ("rule_007_brute_force_success", Severity.CRITICAL),
+                ("rule_001_ssh_brute_force", Severity.MEDIUM),
+            ],
+            [
+                ("rule_003_new_user_created", Severity.HIGH),
+            ],
+        ],
+    }
+    # matching.py imported CORRELATION_RULES by name at module load —
+    # patch it there too, not just in the correlation_rules module
+    import correlation.matching as m
+    m.CORRELATION_RULES = cr.CORRELATION_RULES
+
+    try:
+        anchor_time = datetime(2026, 1, 1, 15, 0, tzinfo=timezone.utc)
+
+        anchor = _make_synthetic_alert(
+            rule_id="rule_008_cron_persistence",
+            timestamp=anchor_time,
+            auid=1000,  # -> "ubuntu"
+        )
+        rule_007_candidate = _make_synthetic_alert(
+            rule_id="rule_007_brute_force_success",
+            timestamp=anchor_time.replace(hour=14, minute=20),
+            username="ubuntu",
+        )
+        rule_001_candidate = _make_synthetic_alert(
+            rule_id="rule_001_ssh_brute_force",
+            timestamp=anchor_time.replace(hour=14, minute=10),
+            username="ubuntu",
+        )
+        rule_003_candidate = _make_synthetic_alert(
+            rule_id="rule_003_new_user_created",
+            timestamp=anchor_time.replace(hour=14, minute=45),
+            username="ubuntu",
+        )
+
+        results = run_correlation([
+            anchor, rule_007_candidate, rule_001_candidate, rule_003_candidate,
+        ])
+
+        print(f"\nAnchorMatches produced: {len(results)}")
+        assert len(results) == 1, f"Expected exactly 1 AnchorMatches, got {len(results)}"
+
+        anchor_matches = results[0]
+        print(f"  anchor={anchor_matches.anchor.dedup_key}")
+        print(f"  group_matches: {len(anchor_matches.group_matches)}")
+        for gm in anchor_matches.group_matches:
+            print(f"    matched={gm.matched.dedup_key} severity={gm.severity} "
+                  f"via={gm.candidate_rule_id}")
+
+        assert len(anchor_matches.group_matches) == 2, (
+            f"Expected 2 group_matches (breach group + persistence group), "
+            f"got {len(anchor_matches.group_matches)}"
+        )
+
+        matched_rule_ids = {gm.candidate_rule_id for gm in anchor_matches.group_matches}
+        assert matched_rule_ids == {"rule_007_brute_force_success", "rule_003_new_user_created"}, (
+            f"Expected matches via rule_007 (not rule_001 — first-tier-wins "
+            f"within the breach group) AND rule_003, got {matched_rule_ids}"
+        )
+
+        print("\nPASS — Group 1 matched rule_007 (not the weaker rule_001, "
+              "correct first-tier-wins), Group 2 independently matched "
+              "rule_003, BOTH combined into one AnchorMatches.")
+    finally:
+        # restore real config so nothing else in this run is affected
+        cr.CORRELATION_RULES = original_rules
+        m.CORRELATION_RULES = original_rules
 
 
 if __name__ == "__main__":
@@ -289,3 +457,4 @@ if __name__ == "__main__":
 
     print()
     _run_synthetic_matching_test()
+    _run_synthetic_orchestration_test()
