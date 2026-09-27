@@ -343,15 +343,22 @@ def _run_synthetic_orchestration_test() -> None:
     live in production config yet.
     """
     from datetime import datetime, timezone
-    import correlation.correlation_rules as cr
 
     print("\n" + "=" * 60)
     print("SYNTHETIC ORCHESTRATION TEST (run_correlation, groups)")
     print("=" * 60)
 
-    # Temporarily enable a second, independent group for this test only
-    original_rules = cr.CORRELATION_RULES
-    cr.CORRELATION_RULES = {
+    # Temporarily enable a second, independent group for this test only.
+    # Patch this module's OWN global namespace directly (not a re-import
+    # of correlation.matching — when this file is run as __main__ via
+    # `python3 -m correlation.matching`, a self-import creates a SEPARATE
+    # module object with its own independent globals, so patching that
+    # copy would silently never affect the run_correlation() actually
+    # executing here. globals() always refers to whichever module
+    # instance is really running this code.)
+    global CORRELATION_RULES
+    original_rules = CORRELATION_RULES
+    CORRELATION_RULES = {
         "rule_008_cron_persistence": [
             [
                 ("rule_007_brute_force_success", Severity.CRITICAL),
@@ -362,10 +369,6 @@ def _run_synthetic_orchestration_test() -> None:
             ],
         ],
     }
-    # matching.py imported CORRELATION_RULES by name at module load —
-    # patch it there too, not just in the correlation_rules module
-    import correlation.matching as m
-    m.CORRELATION_RULES = cr.CORRELATION_RULES
 
     try:
         anchor_time = datetime(2026, 1, 1, 15, 0, tzinfo=timezone.utc)
@@ -421,8 +424,7 @@ def _run_synthetic_orchestration_test() -> None:
               "rule_003, BOTH combined into one AnchorMatches.")
     finally:
         # restore real config so nothing else in this run is affected
-        cr.CORRELATION_RULES = original_rules
-        m.CORRELATION_RULES = original_rules
+        CORRELATION_RULES = original_rules
 
 
 if __name__ == "__main__":
@@ -432,7 +434,7 @@ if __name__ == "__main__":
     alerts = load_alerts()
     print(f"Loaded {len(alerts)} alerts.\n")
 
-    username_index, source_ip_index = build_indices(alerts)
+    username_index, source_ip_index, _uid_cache = build_indices(alerts)
 
     print(f"Username index: {len(username_index)} distinct usernames")
     for username, entries in sorted(username_index.items()):
