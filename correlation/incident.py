@@ -19,9 +19,9 @@
 #   - closed: bool, analyst-controlled lifecycle state (defaults False
 #     for a freshly-built incident).
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from schemas import Alert, Severity
 from correlation.matching import AnchorMatches, highest_severity
@@ -49,6 +49,8 @@ class CorrelatedIncident(BaseModel):
     severity_modified: bool
     info: str
     closed: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    closed_at: Optional[datetime] = None
 
 
 def build_incident(anchor_matches: AnchorMatches) -> CorrelatedIncident:
