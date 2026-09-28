@@ -142,6 +142,15 @@ def merge_incidents(
         if key not in merged:
             merged[key] = old  # carry forward, unrecomputed this run
 
+    # Whatever path an incident took to get here, if it's closed but was
+    # never timestamped (e.g. an analyst/UI flipped only `closed` on the
+    # saved file), stamp closed_at now. Without this it could never age
+    # into the archive, since archiving is measured from closed_at.
+    now = datetime.now(timezone.utc)
+    for key, inc in merged.items():
+        if inc.closed and inc.closed_at is None:
+            merged[key] = inc.model_copy(update={"closed_at": now})
+
     return list(merged.values())
 
 
@@ -177,6 +186,15 @@ def save_incidents(new_incidents: list[CorrelatedIncident]) -> None:
     """
     existing_active = _load_incidents(CORRELATED_ALERTS_PATH, fcntl.LOCK_SH)
     existing_archive = _load_incidents(ARCHIVE_PATH, fcntl.LOCK_SH)
+
+    # correlation is a full re-scan of alerts.json, and archiving removes
+    # an incident from the active file — so without this, the very next
+    # run would re-derive the same incident from the still-present
+    # alerts and re-create it as a fresh OPEN incident. Anything already
+    # archived stays archived. (If its chain later grows, the key
+    # changes, and it correctly surfaces as a new incident.)
+    archived_keys = {inc.key for inc in existing_archive}
+    new_incidents = [inc for inc in new_incidents if inc.key not in archived_keys]
 
     merged = merge_incidents(new_incidents, existing_active)
     active, newly_archived = split_active_and_archive(merged)
