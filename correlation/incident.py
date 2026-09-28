@@ -24,7 +24,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from schemas import Alert, Severity
-from correlation.matching import AnchorMatches, highest_severity
+from correlation.matching import AnchorMatches, highest_severity, event_start, event_end
 
 
 # Which anchor rule_ids are allowed to have their OWN severity
@@ -67,7 +67,7 @@ def build_incident(anchor_matches: AnchorMatches) -> CorrelatedIncident:
     chain_alerts: list[Alert] = [anchor] + [
         gm.matched for gm in anchor_matches.group_matches
     ]
-    chain_alerts.sort(key=lambda a: a.timestamp)
+    chain_alerts.sort(key=event_start)
     chain = [_alert_ref(a) for a in chain_alerts]
 
     key = parent_ref + "::" + "::".join(chain)
@@ -107,12 +107,15 @@ def _build_info_sentence(anchor: Alert, group_matches: list) -> str:
     """
     chain_alerts = sorted(
         [gm.matched for gm in group_matches] + [anchor],
-        key=lambda a: a.timestamp,
+        key=event_start,
     )
 
     parts = [chain_alerts[0].description.rstrip(".")]
     for prev, curr in zip(chain_alerts, chain_alerts[1:]):
-        gap_minutes = int((curr.timestamp - prev.timestamp).total_seconds() // 60)
+        # gap = when the previous activity ended -> when this one began
+        gap_minutes = max(
+            0, int((event_start(curr) - event_end(prev)).total_seconds() // 60)
+        )
         parts.append(f"{gap_minutes} min later, {curr.description.rstrip('.')}")
 
     return ". ".join(parts) + "."
