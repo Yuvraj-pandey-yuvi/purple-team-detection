@@ -22,11 +22,8 @@ REAL_COWRIE_SESSION = """\
 """
 
 
-def test_parses_single_real_session(tmp_path):
-    log_file = tmp_path / "cowrie.json"
-    log_file.write_text(REAL_COWRIE_SESSION)
-
-    sessions = parse_cowrie_sessions(str(log_file))
+def test_parses_single_real_session():
+    sessions = parse_cowrie_sessions(REAL_COWRIE_SESSION.splitlines())
 
     assert len(sessions) == 1
     session = sessions[0]
@@ -37,13 +34,7 @@ def test_parses_single_real_session(tmp_path):
 
 
 def test_login_attempt_captured_correctly():
-    import tempfile, os
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-        f.write(REAL_COWRIE_SESSION)
-        path = f.name
-
-    sessions = parse_cowrie_sessions(path)
-    os.unlink(path)
+    sessions = parse_cowrie_sessions(REAL_COWRIE_SESSION.splitlines())
 
     session = sessions[0]
     assert len(session.login_attempts) == 1
@@ -54,13 +45,7 @@ def test_login_attempt_captured_correctly():
 
 
 def test_commands_captured_in_order():
-    import tempfile, os
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-        f.write(REAL_COWRIE_SESSION)
-        path = f.name
-
-    sessions = parse_cowrie_sessions(path)
-    os.unlink(path)
+    sessions = parse_cowrie_sessions(REAL_COWRIE_SESSION.splitlines())
 
     session = sessions[0]
     assert len(session.commands) == 4
@@ -77,13 +62,7 @@ def test_multiple_sessions_stay_separated():
 
     interleaved = line_a + line_b + line_a_cmd + line_b_cmd
 
-    import tempfile, os
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-        f.write(interleaved)
-        path = f.name
-
-    sessions = parse_cowrie_sessions(path)
-    os.unlink(path)
+    sessions = parse_cowrie_sessions(interleaved.splitlines())
 
     assert len(sessions) == 2
     by_id = {s.session_id: s for s in sessions}

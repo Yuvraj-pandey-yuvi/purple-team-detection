@@ -12,7 +12,14 @@ from datetime import datetime, timezone
 # ── State file ────────────────────────────────────────────────────────────────
 # Tracks how far we've read into each log file between runs
 # So we never reprocess lines we've already seen
-STATE_FILE = os.path.expanduser('~/project/reports/state.json')
+STATE_FILE = os.environ.get(
+    'PURPLE_STATE_FILE',
+    os.path.expanduser('~/project/reports/state.json')
+)
+
+# Log locations: env vars let the pod point at the directory mounts
+AUTH_LOG_PATH  = os.environ.get('AUTH_LOG_PATH',  '/var/log/auth.log')
+AUDIT_LOG_PATH = os.environ.get('AUDIT_LOG_PATH', '/var/log/audit/audit.log')
 
 BUCKET_NAME = 'aws-cloudtrail-logs-349491201539-1a4abf05'
 ACCOUNT_ID  = '349491201539'
@@ -39,68 +46,108 @@ def load_state() -> dict:
 
 
 def save_state(state: dict) -> None:
-    """Save updated state back to state.json."""
+    """Save state atomically: write a temp file, then rename over the real one."""
     os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
-    with open(STATE_FILE, 'w') as f:
+    temp_path = STATE_FILE + '.tmp'
+    with open(temp_path, 'w') as f:
         json.dump(state, f, indent=2)
+    os.replace(temp_path, STATE_FILE)
 
 
-# ── Core seek-pointer reader ──────────────────────────────────────────────────
+# ── Core seek-pointer reader (rotation-aware) ─────────────────────────────────
+
+def find_file_by_inode(directory: str, base_name: str, inode: int):
+    """Find base_name or base_name.N (uncompressed) in directory with this inode."""
+    for name in os.listdir(directory):
+        if name != base_name and not name.startswith(base_name + '.'):
+            continue
+        if name.endswith('.gz'):
+            continue   # compressed files can't be read as plain text
+        path = os.path.join(directory, name)
+        try:
+            if os.stat(path).st_ino == inode:
+                return path
+        except FileNotFoundError:
+            continue   # vanished between listdir and stat
+    return None
+
+
+def read_from_offset(path: str, offset: int, read_partial_tail: bool = False):
+    """
+    Read from byte `offset`; return (lines, new_offset).
+    Only COMPLETE lines (ending in newline) are consumed, so a line still
+    being written is left for the next run. A rotated file is finished, so
+    for it read_partial_tail=True also takes a last line without newline.
+    Lines are split on \n only (str.splitlines would also split on odd
+    characters like form-feed, which can appear inside log messages).
+    """
+    with open(path, 'rb') as f:
+        f.seek(offset)
+        data = f.read()
+
+    last_newline = data.rfind(b'\n')
+    if read_partial_tail:
+        consumed = data
+    elif last_newline == -1:
+        consumed = b''
+    else:
+        consumed = data[:last_newline + 1]
+
+    decoded = consumed.decode('utf-8', errors='replace')
+    lines = [line for line in decoded.split('\n') if line.strip()]
+    return lines, offset + len(consumed)
+
 
 def read_new_lines(filepath: str, state_key: str) -> list[str]:
     """
-    Read only new lines from a log file since last run.
-    
-    HOW IT WORKS:
-    1. Load last byte position from state.json (0 on first run)
-    2. Open file and seek to that position — skips already-read content
-    3. Read everything from that position to end of file
-    4. Save new position so next run starts where we left off
-    
-    WHY BYTES NOT LINE NUMBERS:
-    Line numbers change if log rotation happens (logrotate).
-    Byte position is absolute — but we handle rotation by checking
-    if file is smaller than last position (rotation happened).
-    
-    Args:
-        filepath:  absolute path to log file
-        state_key: key in state.json for this file's position
-                   e.g. 'auth_log_position', 'auditd_position'
-    
-    Returns:
-        list of new log lines (strings, newline stripped)
+    Read new lines since last run, surviving log rotation.
+    State per file: <state_key> = byte offset, <state_key>_inode = which file.
+    Shared by auth.log, auditd and Cowrie collectors.
     """
     state = load_state()
-    last_pos = state.get(state_key, 0)
+    inode_key = state_key + '_inode'
+    saved_offset = state.get(state_key)
+    saved_inode = state.get(inode_key)
 
     if not os.path.exists(filepath):
         print(f"  [WARN] Log file not found: {filepath}")
         return []
 
-    with open(filepath, 'r', errors='replace') as f:
-        # Handle log rotation — if file is smaller than last position,
-        # it was rotated. Start from beginning.
-        f.seek(0, 2)  # seek to end
-        file_size = f.tell()
-        if file_size < last_pos:
-            print(f"  [INFO] Log rotation detected for {filepath}, resetting position")
-            last_pos = 0
+    file_stat = os.stat(filepath)
+    directory, base_name = os.path.split(filepath)
+    lines = []
 
-        # Seek to last read position
-        f.seek(last_pos)
+    if saved_inode is None:
+        # First run, or old state format (offset without inode): replay from 0.
+        if saved_offset is not None:
+            print(f"  [INFO] Old-format state for {filepath}, replaying from 0")
+        offset = 0
+    elif saved_inode != file_stat.st_ino:
+        # The file we were reading was rotated away: finish it, then the new one.
+        old_path = find_file_by_inode(directory, base_name, saved_inode)
+        if old_path:
+            tail_lines, _ = read_from_offset(
+                old_path, saved_offset or 0, read_partial_tail=True
+            )
+            lines += tail_lines
+            print(f"  [INFO] Rotation: drained {len(tail_lines)} lines from {old_path}")
+        else:
+            print(f"  [WARN] Rotation: old file for {filepath} is gone, lines may be lost")
+        offset = 0
+    else:
+        offset = saved_offset or 0
+        if offset > file_stat.st_size:
+            print(f"  [INFO] {filepath} was truncated, resetting position")
+            offset = 0
 
-        # Read all new lines
-        new_lines = [line.rstrip('\n') for line in f.readlines()]
+    new_lines, new_offset = read_from_offset(filepath, offset)
+    lines += new_lines
 
-        # Save new position
-        current_pos = f.tell()
-
-    state[state_key] = current_pos
+    state[state_key] = new_offset
+    state[inode_key] = file_stat.st_ino
     state['last_run'] = datetime.now(timezone.utc).isoformat()
     save_state(state)
-
-    # Filter empty lines
-    return [l for l in new_lines if l.strip()]
+    return lines
 
 
 # ── auth.log collector ────────────────────────────────────────────────────────
@@ -122,7 +169,7 @@ def collect_auth_logs() -> list[str]:
     - Returns list[str] which engine normalizes into list[AuthLogEvent]
     """
     return read_new_lines(
-        filepath  = '/var/log/auth.log',
+        filepath  = AUTH_LOG_PATH,
         state_key = 'auth_log_position'
     )
 
@@ -151,7 +198,7 @@ def collect_auditd_logs() -> str:
         Raw auditd log text — passed to group_audit_lines() in engine
     """
     new_lines = read_new_lines(
-        filepath  = '/var/log/audit/audit.log',
+        filepath  = AUDIT_LOG_PATH,
         state_key = 'auditd_position'
     )
     # group_audit_lines() expects a single string with newlines
