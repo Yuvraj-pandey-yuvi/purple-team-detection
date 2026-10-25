@@ -68,7 +68,7 @@ def detect(events: list[AuthLogEvent]) -> list[Alert]:
                     severity = Severity.MEDIUM
 
                 alerts.append(Alert(
-                    rule_id=ATTCKTechnique.T1110_001,
+                    rule_id="rule_001_ssh_brute_force",
                     technique=ATTCKTechnique.T1110_001,
                     severity=severity,
                     timestamp=datetime.now(timezone.utc),
