@@ -142,8 +142,11 @@ class AuthLogEvent(BaseLogEvent):
 
         # --- Extract hostname and process ---
         parts = line.split()
-        hostname = parts[3] if len(parts) > 3 else ""
-        process_pid = parts[4] if len(parts) > 4 else ""
+        # ISO-8601 line:  "<ts> <host> <proc>[pid]: ..."        -> host is word 1
+        # classic syslog: "Mon DD HH:MM:SS <host> <proc>[pid]: ..." -> host is word 3
+        host_index = 1 if m_iso else 3
+        hostname = parts[host_index] if len(parts) > host_index else ""
+        process_pid = parts[host_index + 1] if len(parts) > host_index + 1 else ""
         
         process = ""
         pid = None
