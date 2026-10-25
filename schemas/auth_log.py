@@ -31,6 +31,14 @@ _SSH_FAIL   = re.compile(
 _SSH_ACCEPT = re.compile(
     r"Accepted (?:password|publickey) for (\S+) from ([\d.a-fA-F:]+) port (\d+)"
 )
+# SSH probes on a key-only server (password login off): scanners never reach a password
+# prompt, so sshd logs these instead of "Failed password". (.*?) allows an EMPTY username.
+_SSH_INVALID_USER = re.compile(
+    r"Invalid user (.*?) from ([\d.a-fA-F:]+) port (\d+)"
+)
+_SSH_CLOSED_AUTH_USER = re.compile(
+    r"Connection closed by authenticating user (.*?) ([\d.a-fA-F:]+) port (\d+) \[preauth\]"
+)
 _NEW_USER   = re.compile(
     r"new user[^:]*:\s*name=(\S+?),"
 )
@@ -142,8 +150,11 @@ class AuthLogEvent(BaseLogEvent):
 
         # --- Extract hostname and process ---
         parts = line.split()
-        hostname = parts[3] if len(parts) > 3 else ""
-        process_pid = parts[4] if len(parts) > 4 else ""
+        # ISO-8601 line:  "<ts> <host> <proc>[pid]: ..."        -> host is word 1
+        # classic syslog: "Mon DD HH:MM:SS <host> <proc>[pid]: ..." -> host is word 3
+        host_index = 1 if m_iso else 3
+        hostname = parts[host_index] if len(parts) > host_index else ""
+        process_pid = parts[host_index + 1] if len(parts) > host_index + 1 else ""
         
         process = ""
         pid = None
@@ -189,6 +200,27 @@ class AuthLogEvent(BaseLogEvent):
                 source_ip=m.group(2),
                 port=int(m.group(3)),
             )
+
+        # --- SSH probe (one event per connection) ---
+        # Only the FIRST line of each connection type counts. "Connection closed by
+        # invalid user ..." is the second line of an invalid-user connection: ignored.
+        # Limited to sshd processes so a sudo line that merely contains these words
+        # (e.g. someone grepping the log) is never treated as an attack.
+        if process.startswith("sshd"):
+            m = _SSH_INVALID_USER.search(line) or _SSH_CLOSED_AUTH_USER.search(line)
+            if m:
+                return cls(
+                    source=LogSource.AUTH_LOG,
+                    timestamp=ts_str,
+                    raw=raw_line,
+                    hostname=hostname,
+                    process=process,
+                    pid=pid,
+                    auth_result="probe",
+                    username=m.group(1) or None,
+                    source_ip=m.group(2),
+                    port=int(m.group(3)),
+                )
 
         # --- New user creation (T1136.001) ---
         m = _NEW_USER.search(line)
