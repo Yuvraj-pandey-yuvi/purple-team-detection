@@ -16,16 +16,23 @@ spec:
     spec:
       initContainers:
         - name: seed-reports
-          image: ghcr.io/yuvraj-pandey-yuvi/purple-team-detection:v1   # same image — it already has the file
+          image: ghcr.io/yuvraj-pandey-yuvi/purple-team-detection:83109da   # same image — it already has the file
           command: ["sh", "-c","cp -rn /app/reports/. /mnt/reports-pvc/"]        # what shell command copies files, and only if they don't already exist?
           volumeMounts:
             - name: reports
               mountPath: /mnt/reports-pvc      # deliberately NOT /app/reports — why?
       containers:
         - name: engine
-          image: ghcr.io/yuvraj-pandey-yuvi/purple-team-detection:v1            # placeholder for now — we'll resolve real image strategy in 3.3
+          image: ghcr.io/yuvraj-pandey-yuvi/purple-team-detection:83109da            # placeholder for now — we'll resolve real image strategy in 3.3
           imagePullPolicy: Always
           command: ["sh","detection/run_loop.sh"]   # what does this do, and why is it necessary?
+          env:
+            - name: PURPLE_STATE_FILE
+              value: /app/reports/state.json
+            - name: AUTH_LOG_PATH
+              value: /host/var/log/auth.log
+            - name: AUDIT_LOG_PATH
+              value: /host/var/log/audit/audit.log
           resources:
             requests:
               memory: "100Mi"           # think about our 331Mi ceiling
@@ -36,11 +43,11 @@ spec:
           volumeMounts:
             - name: reports
               mountPath: /app/reports
-            - name: auth-log
-              mountPath: /var/log/auth.log
+            - name: host-var-log
+              mountPath: /host/var/log
               readOnly: true
-            - name: audit-log
-              mountPath: /var/log/audit/audit.log
+            - name: host-audit-log
+              mountPath: /host/var/log/audit
               readOnly: true
             - name: cowrie-data
               mountPath: /mnt/cowrie-data
@@ -49,14 +56,14 @@ spec:
         - name: reports
           persistentVolumeClaim:
             claimName: reports-pvc            # references a PVC object we haven't written yet
-        - name: auth-log
+        - name: host-var-log
           hostPath:
-            path: /var/log/auth.log
-            type: File                # worth knowing: what does `type: File` actually do here?
-        - name: audit-log
+            path: /var/log
+            type: Directory
+        - name: host-audit-log
           hostPath:
-            path: /var/log/audit/audit.log
-            type: File
+            path: /var/log/audit
+            type: Directory
         - name: cowrie-data
           hostPath:
             path: /var/lib/docker/volumes/project_cowrie-var/_data
