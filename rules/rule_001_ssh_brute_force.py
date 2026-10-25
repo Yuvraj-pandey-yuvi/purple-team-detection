@@ -11,12 +11,16 @@ from schemas import (
 THRESHOLD       = 5
 WINDOW_SECONDS  = 60
 
+# 'failed' = wrong password; 'probe' = username probing on a key-only server.
+# Both are login attempts from one IP (the parser emits one probe event per connection).
+ATTEMPT_RESULTS = ("failed", "probe")
+
 
 def detect(events: list[AuthLogEvent]) -> list[Alert]:
     """
     Sliding window SSH brute force detection.
 
-    Groups failed auth events by source IP.
+    Groups failed-password and probe events by source IP.
     For each IP, slides a 60-second window across attempts.
     If >= 5 attempts fall within any 60-second window, fires alert.
 
@@ -28,7 +32,7 @@ def detect(events: list[AuthLogEvent]) -> list[Alert]:
     # Step 1: group failed attempts by IP
     by_ip: dict[str, list[AuthLogEvent]] = defaultdict(list)
     for event in events:
-        if event.auth_result == "failed" and event.source_ip:
+        if event.auth_result in ATTEMPT_RESULTS and event.source_ip:
             by_ip[event.source_ip].append(event)
 
     # Step 2: sliding window per IP
@@ -82,6 +86,8 @@ def detect(events: list[AuthLogEvent]) -> list[Alert]:
                         "attempt_count": len(window),
                         "attack_speed":  speed.value,
                         "window_seconds": WINDOW_SECONDS,
+                        "probe_count": sum(1 for a in window if a.auth_result == "probe"),
+                        "usernames_tried": sorted({a.username for a in window if a.username})[:10],
                     }
                 ))
 
