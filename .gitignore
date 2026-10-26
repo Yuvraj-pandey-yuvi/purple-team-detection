@@ -12,4 +12,5 @@ reports/cowrie.db
 
 # Correlation engine runtime artifacts — logs and error files, not source
 correlation/correlation_errors.log
-correlation/archive.json
+reports/archive.json
+reports/correlated_alerts.json
