@@ -14,3 +14,6 @@ reports/cowrie.db
 correlation/correlation_errors.log
 reports/archive.json
 reports/correlated_alerts.json
+reports/alerts.json.lock
+reports/alerts.json.corrupt
+reports/alerts.json.tmp
