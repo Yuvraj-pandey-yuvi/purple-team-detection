@@ -8,6 +8,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 import fcntl
+import shutil
+from contextlib import contextmanager
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -73,45 +75,92 @@ COWRIE_LOG_FILE = '/mnt/cowrie-data/log/cowrie/cowrie.json'
 
 # ── Alert persistence ─────────────────────────────────────────────────────────
 
-def load_existing_alerts() -> list[Alert]:
+class AlertStoreError(RuntimeError):
+    """alerts.json exists but cannot be read. The engine must NOT overwrite it:
+    saving 'new alerts only' over an unreadable file would erase the whole history."""
+
+
+@contextmanager
+def alert_store_lock():
+    """
+    Exclusive lock for one read-modify-write of alerts.json.
+
+    It is a SEPARATE lock file because save_alerts() replaces alerts.json with a new
+    file (a new inode), and a lock on the old file would not protect the new one.
+    Readers (dashboard, correlation) need no lock: they always see a complete file.
+    """
+    lock_path = ALERTS_FILE + ".lock"
+    os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+    with open(lock_path, "a") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def _read_alert_entries() -> list:
+    """Parse alerts.json into raw entries. [] if the file does not exist yet.
+    Raises AlertStoreError (and keeps a copy of the file) if it cannot be read."""
     if not os.path.exists(ALERTS_FILE):
         return []
 
-    with open(ALERTS_FILE) as f:
-        fcntl.flock(f.fileno(), fcntl.LOCK_SH)   # NEW — block until safe to read
-        try:
-            try:
-                raw = json.load(f)
-            except json.JSONDecodeError as e:
-                print(f"  [WARN] alerts.json is not valid JSON: {e}")
-                return []
-        finally:
-            fcntl.flock(f.fileno(), fcntl.LOCK_UN)   # NEW — always release
+    try:
+        with open(ALERTS_FILE) as f:
+            raw = json.load(f)
+    except (json.JSONDecodeError, UnicodeDecodeError) as error:
+        corrupt_copy = ALERTS_FILE + ".corrupt"
+        if not os.path.exists(corrupt_copy):
+            shutil.copy2(ALERTS_FILE, corrupt_copy)
+        raise AlertStoreError(
+            f"{ALERTS_FILE} is not valid JSON ({error}). A copy was kept as "
+            f"{corrupt_copy}. The engine will not overwrite it - restore a backup first."
+        ) from error
 
+    if not isinstance(raw, list):
+        raise AlertStoreError(
+            f"{ALERTS_FILE} must hold a JSON array of alerts, found {type(raw).__name__}."
+        )
+    return raw
+
+
+def check_alert_store() -> int:
+    """Cheap pre-flight check, run BEFORE any log is read: returns the number of
+    stored entries, or raises AlertStoreError. Stopping here means no collector has
+    advanced its position, so nothing is lost while the store is being repaired."""
+    return len(_read_alert_entries())
+
+
+def load_existing_alerts() -> list[Alert]:
     alerts: list[Alert] = []
-    for i, entry in enumerate(raw):
+    for i, entry in enumerate(_read_alert_entries()):
         try:
             alerts.append(Alert.model_validate(entry))
         except Exception as e:
             print(f"  [WARN] Skipped malformed alert at index {i}: {e}")
-
     return alerts
 
 
 def save_alerts(alerts: list[Alert]) -> None:
+    """Write atomically: build a complete temp file, then rename it over alerts.json.
+    A crash leaves the old file intact. Callers hold alert_store_lock()."""
     os.makedirs(os.path.dirname(ALERTS_FILE), exist_ok=True)
-    with open(ALERTS_FILE, "w") as f:
-        fcntl.flock(f.fileno(),fcntl.LOCK_EX)
-        try:
+    temp_path = ALERTS_FILE + ".tmp"
+    try:
+        with open(temp_path, "w") as f:
             json.dump(
-            [a.model_dump(mode="json") for a in alerts],
-            f,
-            indent=2,
-            default=str
+                [a.model_dump(mode="json") for a in alerts],
+                f,
+                indent=2,
+                default=str
             )
-        finally:
-            fcntl.flock(f.fileno(),fcntl.LOCK_UN)
-        
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temp_path, ALERTS_FILE)
+    except BaseException:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        raise
 
 
 # ── Deduplication ─────────────────────────────────────────────────────────────
@@ -134,14 +183,29 @@ def deduplicate_alerts(existing, new):
 
 # ── Main engine ───────────────────────────────────────────────────────────────
 
+
+def merge_and_save(new_alerts: list[Alert]) -> tuple[list[Alert], list[Alert]]:
+    """
+    One locked read-modify-write: load what is stored NOW, drop duplicates, save.
+    Returns (all_alerts, new_alerts_actually_added). The lock is held only for this
+    short step, not for log collection or rule evaluation.
+    """
+    with alert_store_lock():
+        existing_alerts = load_existing_alerts()
+        deduped_new = deduplicate_alerts(existing_alerts, new_alerts)
+        all_alerts = existing_alerts + deduped_new
+        save_alerts(all_alerts)
+    return all_alerts, deduped_new
+
+
 def run_engine() -> AlertReport:
     print("=" * 55)
     print("  Purple Detection Engine")
     print(f"  Run time: {datetime.now(timezone.utc).isoformat()}")
     print("=" * 55)
 
-    existing_alerts = load_existing_alerts()
-    print(f"\n  Loaded {len(existing_alerts)} existing alerts")
+    stored_count = check_alert_store()   # stops here if alerts.json is unreadable
+    print(f"\n  Loaded {stored_count} existing alerts")
 
     new_alerts: list[Alert] = []
     parse_errors = 0
@@ -283,12 +347,9 @@ def run_engine() -> AlertReport:
     new_alerts.extend(falco_default_alerts)
     print(f"  Default rule passthrough: {len(falco_default_alerts)} alerts")
     # ── Deduplicate + merge + save ────────────────────────────
-    deduped_new = deduplicate_alerts(existing_alerts, new_alerts)
+    all_alerts, deduped_new = merge_and_save(new_alerts)
     print(f"\n  New alerts: {len(new_alerts)} "
           f"({len(new_alerts) - len(deduped_new)} duplicates suppressed)")
-
-    all_alerts = existing_alerts + deduped_new
-    save_alerts(all_alerts)
     print(f"  Total accumulated alerts: {len(all_alerts)}")
 
     # ── Build report ──────────────────────────────────────────
