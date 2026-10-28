@@ -16,19 +16,21 @@ spec:
     spec:
       initContainers:
         - name: seed-reports
-          image: ghcr.io/yuvraj-pandey-yuvi/purple-team-detection:b65da0e   # same image — it already has the file
+          image: ghcr.io/yuvraj-pandey-yuvi/purple-team-detection:97e1d3e   # same image — it already has the file
           command: ["sh", "-c","cp -rn /app/reports/. /mnt/reports-pvc/"]        # what shell command copies files, and only if they don't already exist?
           volumeMounts:
             - name: reports
               mountPath: /mnt/reports-pvc      # deliberately NOT /app/reports — why?
       containers:
         - name: engine
-          image: ghcr.io/yuvraj-pandey-yuvi/purple-team-detection:b65da0e            # placeholder for now — we'll resolve real image strategy in 3.3
+          image: ghcr.io/yuvraj-pandey-yuvi/purple-team-detection:97e1d3e            # placeholder for now — we'll resolve real image strategy in 3.3
           imagePullPolicy: Always
           command: ["sh","detection/run_loop.sh"]   # what does this do, and why is it necessary?
           env:
             - name: PURPLE_STATE_FILE
               value: /app/reports/state.json
+            - name: PURPLE_HEARTBEAT
+              value: "1"
             - name: AUTH_LOG_PATH
               value: /host/var/log/auth.log
             - name: AUDIT_LOG_PATH
