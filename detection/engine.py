@@ -20,6 +20,8 @@ from logs.log_collector import (
     collect_cloudtrail_logs,
     collect_falco_logs,  
     collect_cowrie_logs,
+    load_state,
+    save_state,
     BUCKET_NAME, ACCOUNT_ID, REGION,
     FALCO_BUCKET_NAME                       
 )
@@ -62,6 +64,7 @@ from rules.rule_015_cowrie_login import detect as rule_cowrie_login
 
 #------falco-rules--------------
 from rules.rule_017_falco_default_passthrough import detect as rule_falco_passthrough
+from rules.rule_018_collector_heartbeat import detect as rule_heartbeat, RULE_ID as HEARTBEAT_RULE_ID
 
 # ── State files ───────────────────────────────────────────────────────────────
 ALERTS_FILE = str(Path(__file__).resolve().parent.parent / "reports" / "alerts.json")
@@ -196,6 +199,30 @@ def merge_and_save(new_alerts: list[Alert]) -> tuple[list[Alert], list[Alert]]:
         all_alerts = existing_alerts + deduped_new
         save_alerts(all_alerts)
     return all_alerts, deduped_new
+
+
+# ── Heartbeat (rule_018) ──────────────────────────────────────────────────────
+# Only the engine pod can see the logs. The dashboard's /refresh button also runs
+# run_engine(), in a pod WITHOUT the logs mounted, where every source would look
+# silent. So the heartbeat is opt-in per process: the engine deployment sets
+# PURPLE_HEARTBEAT=1.
+HEARTBEAT_ENABLED = os.environ.get("PURPLE_HEARTBEAT") == "1"
+
+
+def run_heartbeat(received_counts: dict, now=None) -> list[Alert]:
+    """rule_018 needs memory between runs, so its state lives in state.json."""
+    state = load_state()
+    alerts, state["heartbeat"] = rule_heartbeat(
+        received_counts, state.get("heartbeat", {}), now or datetime.now(timezone.utc)
+    )
+    save_state(state)
+    return alerts
+
+
+def alerts_for_coverage(alerts: list[Alert]) -> list[Alert]:
+    """Silence alerts describe the pipeline's health, not an attack technique, so they
+    must not mark 'Disable auditd' or 'Disable CloudTrail' as detected in the coverage."""
+    return [a for a in alerts if a.rule_id != HEARTBEAT_RULE_ID]
 
 
 def run_engine() -> AlertReport:
@@ -345,6 +372,17 @@ def run_engine() -> AlertReport:
 
     falco_default_alerts = rule_falco_passthrough(falco_events)
     new_alerts.extend(falco_default_alerts)
+
+    # ── Heartbeat (rule_018): is every log source still delivering input? ─
+    if HEARTBEAT_ENABLED:
+        heartbeat_alerts = run_heartbeat({
+            "auth_log":   len(auth_raw_lines),
+            "auditd":     len([line for line in auditd_raw.splitlines() if line.strip()]),
+            "cowrie":     len(cowrie_raw_lines),
+            "cloudtrail": len(ct_raw),
+        })
+        new_alerts.extend(heartbeat_alerts)
+        print(f"\n  Heartbeat (rule_018): {len(heartbeat_alerts)} alerts")
     print(f"  Default rule passthrough: {len(falco_default_alerts)} alerts")
     # ── Deduplicate + merge + save ────────────────────────────
     all_alerts, deduped_new = merge_and_save(new_alerts)
@@ -355,7 +393,7 @@ def run_engine() -> AlertReport:
     # ── Build report ──────────────────────────────────────────
     report = AlertReport(
         alerts              = all_alerts,
-        coverage            = CoverageSummary.from_alerts(all_alerts),
+        coverage            = CoverageSummary.from_alerts(alerts_for_coverage(all_alerts)),
         log_lines_processed = lines_processed,
         parse_errors        = parse_errors,
     )
