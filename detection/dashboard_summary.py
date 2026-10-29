@@ -26,6 +26,7 @@ WINDOW_HOURS = 24
 TOP_ATTACKERS = 25
 TOP_CREDENTIALS = 12
 NOTABLE_LIMIT = 15
+TIMELINE_DAYS = 30
 INTERNAL_AUIDS = {int(x) for x in os.environ.get("PURPLE_INTERNAL_AUIDS", "1000").split(",") if x.strip()}
 _SEVERITY_RANK = {"INFO": 0, "LOW": 1, "MEDIUM": 2, "HIGH": 3, "CRITICAL": 4}
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
@@ -54,28 +55,43 @@ def _src(alert) -> str:
     return getattr(alert.log_source, "value", str(alert.log_source))
 
 
-def hourly_timeline(alerts, now: datetime, hours: int = WINDOW_HOURS) -> list[dict]:
-    """One bucket per hour, oldest first. Honeypot alerts are counted apart from the rest
-    because they outnumber everything else by far and would flatten the chart."""
-    top_of_hour = now.replace(minute=0, second=0, microsecond=0)
-    starts = [top_of_hour - timedelta(hours=h) for h in range(hours - 1, -1, -1)]
-    buckets = {start: {"hour": start.isoformat(), "honeypot": 0, "other": 0} for start in starts}
+def is_public_alert(alert) -> bool:
+    """Alerts the public page may count or list: not honeypot, not INFO, not the owner's own."""
+    return _src(alert) != "cowrie" and _sev(alert) != "INFO" and alert.auid not in INTERNAL_AUIDS
+
+
+def honeypot_daily_sessions(db_path: str, now: datetime, days: int = TIMELINE_DAYS) -> dict[str, int]:
+    """Honeypot sessions per UTC day for the last `days` days, counted in SQL.
+    Sessions, not alerts: rule_015 only alerts on a SUCCESSFUL login, so alerts alone
+    would hide the scanners that connect and leave."""
+    first_day = (now - timedelta(days=days - 1)).date().isoformat()
+    connection = _open_ro(db_path)
+    try:
+        return {row["day"]: row["n"] for row in connection.execute(
+            "SELECT substr(start_time, 1, 10) AS day, COUNT(*) AS n FROM sessions "
+            "WHERE substr(start_time, 1, 10) >= ? GROUP BY day", (first_day,))}
+    finally:
+        connection.close()
+
+
+def daily_timeline(alerts, honeypot_by_day: dict[str, int], now: datetime, days: int = TIMELINE_DAYS) -> list[dict]:
+    """One bucket per UTC day, oldest first: honeypot sessions next to public alerts."""
+    first = now.date() - timedelta(days=days - 1)
+    buckets = {}
+    for offset in range(days):
+        day = (first + timedelta(days=offset)).isoformat()
+        buckets[day] = {"day": day, "honeypot": honeypot_by_day.get(day, 0), "other": 0}
     for alert in alerts:
-        bucket = buckets.get(event_time(alert).replace(minute=0, second=0, microsecond=0))
-        if bucket is not None:
-            bucket["honeypot" if _src(alert) == "cowrie" else "other"] += 1
-    return [buckets[start] for start in starts]
+        if is_public_alert(alert):
+            bucket = buckets.get(event_time(alert).date().isoformat())
+            if bucket is not None:
+                bucket["other"] += 1
+    return list(buckets.values())
 
 
 def notable_alerts(alerts, now: datetime, limit: int = NOTABLE_LIMIT) -> list[dict]:
     """Newest non-honeypot alerts, minus INFO and the owner's own activity."""
-    picked = []
-    for alert in alerts:
-        if _src(alert) == "cowrie" or _sev(alert) == "INFO":
-            continue
-        if alert.auid in INTERNAL_AUIDS:
-            continue
-        picked.append(alert)
+    picked = [alert for alert in alerts if is_public_alert(alert)]
     picked.sort(key=event_time, reverse=True)
     return [{
         "time": event_time(a).isoformat(),
@@ -174,9 +190,10 @@ def build_summary(alerts, coverage, heartbeat_state, db_path: str, geo: dict, no
 
     try:
         attackers, usernames, passwords, hp_totals = honeypot_stats(db_path, now)
+        honeypot_by_day = honeypot_daily_sessions(db_path, now)
     except sqlite3.Error as error:
         warnings.append(f"honeypot database unreadable: {error}")
-        attackers, usernames, passwords = [], [], []
+        attackers, usernames, passwords, honeypot_by_day = [], [], [], {}
         hp_totals = {"sessions_total": 0, "attackers_total": 0, "attackers_24h": 0, "sessions_24h": 0}
 
     probes = ssh_probe_sources(alerts)
@@ -192,6 +209,7 @@ def build_summary(alerts, coverage, heartbeat_state, db_path: str, geo: dict, no
     return {
         "generated_at": now.isoformat(),
         "window_hours": WINDOW_HOURS,
+        "timeline_days": TIMELINE_DAYS,
         "warnings": warnings,
         "totals": {
             "alerts_total": len(alerts),
@@ -204,7 +222,7 @@ def build_summary(alerts, coverage, heartbeat_state, db_path: str, geo: dict, no
             "attackers_24h": hp_totals["attackers_24h"],
         },
         "severity_24h": dict(severity_24h),
-        "timeline": hourly_timeline(alerts, now),
+        "timeline": daily_timeline(alerts, honeypot_by_day, now),
         "notable": notable_alerts(alerts, now),
         "attackers": attacker_rows,
         "usernames": usernames,

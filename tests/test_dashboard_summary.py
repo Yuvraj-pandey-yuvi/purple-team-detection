@@ -10,7 +10,7 @@ from storage.cowrie_store import init_db
 from detection import geo_lookup
 from detection.geo_lookup import RateLimited
 from detection.dashboard_summary import (
-    build_summary, hourly_timeline, notable_alerts, pipeline_health, write_summary, clean_text,
+    build_summary, daily_timeline, honeypot_daily_sessions, notable_alerts, pipeline_health, write_summary, clean_text,
 )
 
 NOW = datetime(2026, 10, 29, 12, 30, tzinfo=timezone.utc)
@@ -60,19 +60,22 @@ def test_info_and_honeypot_alerts_not_notable():
     assert notable_alerts(alerts, NOW) == []
 
 
-def test_timeline_has_24_buckets_and_splits_honeypot():
-    alerts = [make_alert(source="cowrie", minutes_ago=5), make_alert(source="cowrie", minutes_ago=5),
-              make_alert(minutes_ago=5), make_alert(minutes_ago=60 * 30)]   # last one is outside 24h
-    timeline = hourly_timeline(alerts, NOW)
-    assert len(timeline) == 24
-    assert timeline[-1] == {"hour": "2026-10-29T12:00:00+00:00", "honeypot": 2, "other": 1}
-    assert sum(b["honeypot"] + b["other"] for b in timeline) == 3
+def test_daily_timeline_has_30_days_and_uses_sessions_for_the_honeypot(honeypot_db):
+    by_day = honeypot_daily_sessions(honeypot_db, NOW)
+    alerts = [make_alert(minutes_ago=5), make_alert(minutes_ago=60 * 24 * 2),
+              make_alert(minutes_ago=5, auid=1000, source="auditd"),   # owner activity: not counted
+              make_alert(minutes_ago=60 * 24 * 40)]                    # outside the 30 days
+    timeline = daily_timeline(alerts, by_day, NOW)
+    assert len(timeline) == 30 and timeline[-1]["day"] == "2026-10-29"
+    assert timeline[-1] == {"day": "2026-10-29", "honeypot": 1, "other": 1}
+    assert {b["day"]: b["honeypot"] for b in timeline}["2026-10-24"] == 2     # two sessions, five days ago
+    assert sum(b["other"] for b in timeline) == 2
 
 
 def test_naive_timestamps_are_treated_as_utc():
     alert = make_alert()
     alert = alert.model_copy(update={"timestamp": NOW.replace(tzinfo=None), "first_seen": None})
-    assert hourly_timeline([alert], NOW)[-1]["other"] == 1
+    assert daily_timeline([alert], {}, NOW)[-1]["other"] == 1
 
 
 def test_attackers_merge_honeypot_and_ssh_probes_and_attach_geo(honeypot_db):
