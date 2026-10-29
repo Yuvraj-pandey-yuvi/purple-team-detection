@@ -1,186 +1,62 @@
-# api.py
-# FastAPI backend serving detection report to dashboard
+# dashboard/api.py
+"""
+Public, READ-ONLY dashboard API.
 
+It serves exactly two things: the page, and dashboard_summary.json (written by the engine,
+already stripped of raw logs and of the owner's own activity). There are no write
+endpoints, no /refresh and no access to alerts.json, so the full report never leaves the
+cluster. The dashboard pod also mounts the volume read-only, which enforces the same
+rule at the filesystem level (two independent layers).
+"""
 import json
 import os
-import subprocess
-import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
-from pydantic import BaseModel
-from storage.cowrie_store import (
-    block_ip, unblock_ip, get_all_blocked,
-    get_sessions_by_ip, get_login_attempt_count,
-)
-class BlockRequest(BaseModel):
-    ip: str
-    reason: str | None = None
-
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.responses import FileResponse
 
-app = FastAPI(title="Purple Team Detection API")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-REPORT_PATH = str(PROJECT_ROOT / "reports" / "latest_report.json")
-DASHBOARD_PATH = str(PROJECT_ROOT / "dashboard")
+SUMMARY_PATH = os.environ.get("PURPLE_SUMMARY_PATH", str(PROJECT_ROOT / "reports" / "dashboard_summary.json"))
+INDEX_PATH = str(Path(__file__).resolve().parent / "index.html")
+
+# No docs/openapi pages on a public service.
+app = FastAPI(title="Purple Team Detection", docs_url=None, redoc_url=None, openapi_url=None)
+
+# One page with inline script/style. The ONLY third-party hosts allowed: the Leaflet CDN and the map tiles.
+CDN = "https://cdnjs.cloudflare.com"                      # Leaflet, pinned to 1.9.4 in the page
+TILES = "https://*.basemaps.cartocdn.com"                  # dark map tiles
+CSP = (f"default-src 'none'; script-src 'self' 'unsafe-inline' {CDN}; style-src 'unsafe-inline' {CDN}; "
+       f"img-src 'self' data: {TILES}; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 
 
-def load_report():
-    if not os.path.exists(REPORT_PATH):
-        raise HTTPException(
-            status_code=404,
-            detail="No report found. Run report_generator.py first."
-        )
-    with open(REPORT_PATH) as f:
-        return json.load(f)
+@app.middleware("http")
+async def security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["Content-Security-Policy"] = CSP
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["X-Frame-Options"] = "DENY"
+    return response
 
 
-def _to_frontend_alert(a: dict) -> dict:
-    """The dashboard's index.html JS was built against an older,
-    flatter alert shape (rule_name, reason, comm, attempts,
-    auid_human, etc.) that doesn't match the current Alert schema
-    (rule_id, description, extra={...}). Rather than rewrite the
-    frontend JS, this maps each real alert onto the field names it
-    expects, without changing any HTML/JS.
-    """
-    extra = a.get("extra", {}) or {}
-    auid = extra.get("auid")
-
-    out = {
-        **a,  # keep everything real (rule_id, technique, severity, etc.)
-        **extra,  # flatten extra fields (comm, exe, auid, attempt_count, etc.) to top level
-        "rule_name": a.get("rule_id"),
-        "reason":    a.get("description"),
-        "auid_human": str(auid) if auid is not None else None,
-        "attempts":   extra.get("attempt_count"),
-        "cron_file":  extra.get("file"),
-        "created_by": extra.get("auid_human"),
-        "privilege_escalated": a.get("technique") == "T1548",
-        "name_suspicious": extra.get("signal") == "name_mismatch",
-    }
-    return out
-
-
-@app.get("/")
-def serve_dashboard():
-    index_path = os.path.join(DASHBOARD_PATH, 'index.html')
-    return FileResponse(index_path)
-
-
-@app.get("/report")
-def get_report():
-    return load_report()
+@app.get("/", include_in_schema=False)
+def index():
+    return FileResponse(INDEX_PATH, media_type="text/html")
 
 
 @app.get("/summary")
-def get_summary():
-    report = load_report()
-    return {
-        'generated_at': report.get('generated_at'),
-        'summary':      report.get('summary'),
-    }
-
-
-@app.get("/techniques")
-def get_techniques():
-    report = load_report()
-    return report.get('techniques', {})
-
-
-@app.get("/alerts")
-def get_alerts():
-    report   = load_report()
-    alerts   = report.get('alerts', [])
-    order    = {'CRITICAL': 0, 'HIGH': 1, 'MEDIUM': 2}
-    sorted_alerts = sorted(
-        alerts,
-        key=lambda x: order.get(x.get('severity', 'MEDIUM'), 9)
-    )
-    return [_to_frontend_alert(a) for a in sorted_alerts]
-
-
-@app.get("/user-activity")
-def get_user_activity():
-    report = load_report()
-    return report.get('user_activity', {})
-
-
-@app.get("/attackers")
-def get_attackers():
-    report = load_report()
-    return report.get('user_activity', {}).get('ssh_attackers', {})
-
-
-@app.post("/refresh")
-def refresh_report():
+def summary():
     try:
-        result = subprocess.run(
-            [sys.executable, '-m', 'reports.report_generator'],
-            cwd=str(PROJECT_ROOT),
-            capture_output=True,
-            text=True,
-            timeout=120
-        )
-        if result.returncode != 0:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Report generation failed: {result.stderr}"
-            )
-        return {
-            'status':    'success',
-            'message':   'Report refreshed successfully',
-            'timestamp': datetime.now(timezone.utc).isoformat()
-        }
-    except subprocess.TimeoutExpired:
-        raise HTTPException(
-            status_code=504,
-            detail="Report generation timed out"
-        )
+        with open(SUMMARY_PATH) as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        raise HTTPException(status_code=503, detail="summary not generated yet")
+    except ValueError:
+        raise HTTPException(status_code=503, detail="summary unreadable")
+    return Response(content=json.dumps(data), media_type="application/json",
+                    headers={"Cache-Control": "no-store"})
 
 
 @app.get("/health")
 def health():
-    report_exists = os.path.exists(REPORT_PATH)
-    return {
-        'status':        'running',
-        'report_exists': report_exists,
-        'timestamp':     datetime.now(timezone.utc).isoformat()
-    }
-
-@app.post("/attackers/block")
-def block_attacker(req: BlockRequest):
-    sessions = get_sessions_by_ip(req.ip)
-    attempt_count = get_login_attempt_count(req.ip)
-
-    auto_reason = (
-        f"{len(sessions)} session(s), {attempt_count} login attempt(s) "
-        f"from {req.ip}"
-    )
-    final_reason = auto_reason
-    if req.reason:
-        final_reason = f"{auto_reason} | Note: {req.reason}"
-
-    block_ip(req.ip, final_reason, blocked_by="manual")
-    return {"status": "blocked", "ip": req.ip, "reason": final_reason}
-
-
-@app.post("/attackers/unblock")
-def unblock_attacker(ip: str):
-    unblock_ip(ip)
-    return {"status": "unblocked", "ip": ip}
-
-
-@app.get("/attackers/blocked")
-def list_blocked():
-    return get_all_blocked()
+    return {"status": "ok"}
