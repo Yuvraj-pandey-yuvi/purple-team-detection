@@ -37,6 +37,8 @@ from schemas import (
     Alert, AlertReport, CoverageSummary, parse_cowrie_sessions
 )
 from storage.cowrie_store import init_db, store_session
+from storage.cowrie_store import DB_PATH as COWRIE_DB_PATH
+from detection.dashboard_summary import publish as publish_dashboard_summary
 
 # ── Rules — auth.log ──────────────────────────────────────────────────────────
 from rules.rule_001_ssh_brute_force    import detect as rule_ssh_brute
@@ -404,6 +406,20 @@ def run_engine() -> AlertReport:
           f"{report.coverage.total_techniques} techniques)")
     print(f"  Parse errors: {parse_errors}")
     print(f"{'=' * 55}\n")
+
+    # The public dashboard reads one small summary file. A problem here must never
+    # stop a detection cycle, so it is reported and skipped.
+    try:
+        summary = publish_dashboard_summary(
+            all_alerts, report.coverage, COWRIE_DB_PATH.parent,
+            heartbeat_state=load_state().get("heartbeat"),
+            geo_enabled=os.environ.get("PURPLE_GEO", "1") == "1",
+        )
+        located = sum(1 for a in summary["attackers"] if a["geo"])
+        print(f"  Dashboard summary: {len(summary['attackers'])} attackers, {located} located, "
+              f"{len(summary['warnings'])} warnings")
+    except Exception as error:
+        print(f"  [WARN] dashboard summary failed: {error}")
 
     return report
 
