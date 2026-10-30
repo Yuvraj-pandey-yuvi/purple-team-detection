@@ -21,6 +21,7 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 
 from rules.rule_018_collector_heartbeat import SOURCES as HEARTBEAT_SOURCES
+from detection import public_alerts
 
 WINDOW_HOURS = 24
 TOP_ATTACKERS = 25
@@ -57,7 +58,7 @@ def _src(alert) -> str:
 
 def is_public_alert(alert) -> bool:
     """Alerts the public page may count or list: not honeypot, not INFO, not the owner's own."""
-    return _src(alert) != "cowrie" and _sev(alert) != "INFO" and alert.auid not in INTERNAL_AUIDS
+    return _src(alert) != "cowrie" and public_alerts.is_public(alert)
 
 
 def honeypot_daily_sessions(db_path: str, now: datetime, days: int = TIMELINE_DAYS) -> dict[str, int]:
@@ -185,7 +186,8 @@ def build_summary(alerts, coverage, heartbeat_state, db_path: str, geo: dict, no
     now = _as_utc(now or datetime.now(timezone.utc))
     warnings: list[str] = []
     since = now - timedelta(hours=WINDOW_HOURS)
-    recent = [a for a in alerts if event_time(a) >= since]
+    public = [a for a in alerts if public_alerts.is_public(a)]      # same rule as the alerts page
+    recent = [a for a in public if event_time(a) >= since]
     severity_24h = Counter(_sev(a) for a in recent)
 
     try:
@@ -212,7 +214,7 @@ def build_summary(alerts, coverage, heartbeat_state, db_path: str, geo: dict, no
         "timeline_days": TIMELINE_DAYS,
         "warnings": warnings,
         "totals": {
-            "alerts_total": len(alerts),
+            "alerts_total": len(public),
             "alerts_24h": len(recent),
             "critical_24h": severity_24h.get("CRITICAL", 0),
             "high_24h": severity_24h.get("HIGH", 0),
@@ -269,5 +271,13 @@ def publish(alerts, coverage, reports_dir, heartbeat_state=None, geo_enabled: bo
             attach_geo(summary, geo)
         except Exception as error:                        # a geo problem must never cost us the summary
             summary["warnings"].append(f"geolocation failed: {clean_text(error, 120)}")
+    try:
+        db_path = os.path.join(reports_dir, "public_alerts.db")
+        public_alerts.rebuild(alerts, db_path, hidden_ips=None)
+        since_iso = ((now or datetime.now(timezone.utc)) - timedelta(hours=WINDOW_HOURS)).isoformat()
+        summary["rule_counts"] = public_alerts.rule_counts(db_path, since_iso)
+    except Exception as error:                            # the alerts page degrades; the engine carries on
+        summary["warnings"].append(f"public alert store failed: {clean_text(error, 120)}")
+        summary["rule_counts"] = {}
     write_summary(summary, os.path.join(reports_dir, "dashboard_summary.json"))
     return summary
