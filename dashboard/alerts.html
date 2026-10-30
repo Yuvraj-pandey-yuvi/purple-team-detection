@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Alerts · Purple Team Detection</title>
+<style>
+:root{--bg:#0a0e16;--p:#101722;--b:#1c2636;--t:#e6eaf2;--m:#8b98ad;--pu:#a78bfa}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(1200px 500px at 70% -10%,#1a1440 0,transparent 60%),var(--bg);color:var(--t);font:14px/1.5 system-ui,Segoe UI,Roboto,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid var(--b)}
+h1{margin:0;font-size:17px;letter-spacing:.14em;text-transform:uppercase}h1 b{color:var(--pu)}a{color:var(--pu);text-decoration:none}
+main{padding:20px 24px;max-width:1400px;margin:auto;display:grid;gap:16px}.card{background:linear-gradient(180deg,#121a28,var(--p));border:1px solid var(--b);border-radius:12px;padding:16px;min-width:0}
+.card h2{margin:0 0 12px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--m);font-weight:600}
+.ctl{display:flex;flex-wrap:wrap;gap:16px;align-items:end}.ctl label{display:flex;flex-direction:column;gap:4px;color:var(--m);font-size:12px}
+select{background:#0d1420;color:var(--t);border:1px solid #2a3556;border-radius:8px;padding:8px 10px;font:inherit;min-width:190px}
+table{width:100%;border-collapse:collapse;font-size:13px}th{color:var(--m);font-weight:600;font-size:11px;text-align:left;letter-spacing:.1em;text-transform:uppercase;padding:0 8px 8px}td{padding:7px 8px;border-top:1px solid #172033}td.n{text-align:right;font-variant-numeric:tabular-nums}
+tr.rl{cursor:pointer}tr.rl:hover td{background:#131c2c}.mono{font-family:ui-monospace,Menlo,monospace}.zero{color:var(--m)}
+</style></head><body>
+<header><div><h1>Purple Team <b>Detection</b> · Alerts</h1><div style="color:var(--m);font-size:12px">Every public detection, by day. Click an alert for all of its stored fields.</div></div><a href="/">← Back to dashboard</a></header>
+<main>
+<div class="card"><h2>Filters</h2><div class="ctl">
+<label>Day<select id="day"></select></label><label>Sort by<select id="sort"><option value="priority">Priority (highest first)</option><option value="time">Time (newest first)</option></select></label>
+<label>Rule<select id="rule"></select></label></div></div>
+<div class="card"><h2>How many times each rule has fired · click a rule to filter</h2><div style="overflow-x:auto"><table><thead><tr><th>Rule</th><th class="n" style="text-align:right">All time</th><th style="text-align:right">Last 24 h</th><th>Last fired (UTC)</th></tr></thead><tbody id="rules"></tbody></table></div></div>
+<div class="card"><h2 id="lt">Alerts</h2><div id="list"></div></div>
+</main>
+<script src="/alerts.js"></script>
+<script>
+"use strict";
+const UI=window.AlertsUI,$=s=>document.querySelector(s),P=new URLSearchParams(location.search);
+const st={day:P.get("day")||"24h",sort:P.get("sort")==="time"?"time":"priority",rule:P.get("rule")||"",page:Math.max(1,+P.get("page")||1)};
+const opt=(v,t)=>{const o=document.createElement("option");o.value=v;o.textContent=t;return o};
+function sync(){const q=new URLSearchParams({day:st.day,sort:st.sort,page:st.page});if(st.rule)q.set("rule",st.rule);history.replaceState(null,"","?"+q)}
+async function refresh(){sync();const q={sort:st.sort,page:st.page,per_page:50};if(st.day==="24h")q.hours=24;else q.day=st.day;if(st.rule)q.rule=st.rule;
+ $("#lt").textContent=(st.day==="24h"?"Alerts · last 24 hours":"Alerts · "+st.day)+(st.rule?" · "+st.rule:"");
+ await UI.load($("#list"),q,{onPage:p=>{st.page=p;refresh();window.scrollTo({top:0,behavior:"smooth"})}})}
+async function init(){let days,rules;
+ try{[days,rules]=await Promise.all([UI.getJSON("/api/days"),UI.getJSON("/api/rules")])}catch(e){$("#list").textContent="Alerts are not available right now ("+e.message+").";return}
+ const ds=$("#day");ds.append(opt("24h","Last 24 hours"));days.forEach(d=>ds.append(opt(d.day,d.day+"  ·  "+UI.fmt(d.count)+" alerts")));
+ if(![...ds.options].some(o=>o.value===st.day))st.day="24h";ds.value=st.day;$("#sort").value=st.sort;
+ const names=Object.keys(rules).sort((a,b)=>rules[b].total-rules[a].total),rs=$("#rule");rs.append(opt("","All rules"));
+ names.forEach(r=>rs.append(opt(r,r+"  ("+UI.fmt(rules[r].total)+")")));if(!names.includes(st.rule))st.rule="";rs.value=st.rule;
+ const tb=$("#rules");names.forEach(r=>{const tr=document.createElement("tr");tr.className="rl";
+  [[r,"mono"],[UI.fmt(rules[r].total),"n"],[UI.fmt(rules[r].last_24h),"n"+(rules[r].last_24h?"":" zero")],[UI.when(rules[r].last_seen),"zero"]].forEach(c=>{const td=document.createElement("td");td.className=c[1];td.textContent=c[0];tr.append(td)});
+  tr.onclick=()=>{st.rule=r;rs.value=r;st.page=1;refresh();window.scrollTo({top:document.body.scrollHeight,behavior:"smooth"})};tb.append(tr)});
+ ds.onchange=()=>{st.day=ds.value;st.page=1;refresh()};$("#sort").onchange=e=>{st.sort=e.target.value;st.page=1;refresh()};rs.onchange=()=>{st.rule=rs.value;st.page=1;refresh()};
+ refresh()}
+init();
+</script></body></html>

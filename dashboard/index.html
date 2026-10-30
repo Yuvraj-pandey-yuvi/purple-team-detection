@@ -23,6 +23,7 @@ main{padding:20px 24px;display:grid;gap:16px;grid-template-columns:repeat(12,1fr
 table{width:100%;border-collapse:collapse;font-size:13px}th{color:var(--m);font-weight:600;font-size:11px;text-align:left;letter-spacing:.1em;text-transform:uppercase;padding:0 6px 8px}td{padding:6px;border-top:1px solid #172033}td.num{text-align:right;font-variant-numeric:tabular-nums}
 .sev{font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;letter-spacing:.06em}.CRITICAL{background:#5b1325;color:#ff8fa5}.HIGH{background:#5a3207;color:#ffc069}.MEDIUM{background:#4a3f0a;color:#ffe27a}.LOW,.INFO{background:#16314a;color:#8ecbff}
 .chips{display:flex;flex-wrap:wrap;gap:8px}.chip{border:1px solid var(--b);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--m)}.chip.on{border-color:#1f7a5a;color:var(--t);background:#0f2a24}.chip b{font-family:ui-monospace,Menlo,monospace;color:var(--gr)}.chip:not(.on) b{color:var(--m)}
+.ah{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:6px}.ah h2{margin:0}.actl{display:flex;gap:14px;align-items:center;color:var(--m);font-size:12px}.actl select{background:#0d1420;color:var(--t);border:1px solid #2a3556;border-radius:8px;padding:6px 8px;font:inherit}
 .leg{display:flex;gap:16px;color:var(--m);font-size:12px;margin-top:6px}.leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}
 #err{display:none;margin:12px 24px;padding:10px 14px;border:1px solid var(--rd);border-radius:8px;color:#ffb3c0}
 footer{color:var(--m);font-size:12px;padding:8px 24px 28px;max-width:1400px;margin:auto}
@@ -41,12 +42,13 @@ footer{color:var(--m);font-size:12px;padding:8px 24px 28px;max-width:1400px;marg
 <div class="card w4"><h2>Pipeline health</h2><div id="pipe"></div></div>
 <div class="card w8"><h2>Last 30 days</h2><svg id="tl" viewBox="0 0 640 170" width="100%" role="img" aria-label="Daily honeypot sessions and alerts"></svg><div class="leg"><span><i style="background:var(--pu)"></i>honeypot sessions</span><span><i style="background:var(--cy)"></i>detection alerts</span></div></div>
 <div class="card w4"><h2>Most active attackers · all time</h2><table><tbody id="att"></tbody></table></div>
-<div class="card w4"><h2>Usernames tried</h2><div id="usr"></div></div>
-<div class="card w4"><h2>Passwords tried</h2><div id="pwd"></div></div>
-<div class="card w4"><h2>Notable alerts</h2><div id="nota"></div></div>
+<div class="card w6"><h2>Usernames tried</h2><div id="usr"></div></div>
+<div class="card w6"><h2>Passwords tried</h2><div id="pwd"></div></div>
+<div class="card w12"><div class="ah"><h2>Alerts · last 24 hours</h2><span class="actl"><label>Sort by <select id="asort"><option value="priority">Priority</option><option value="time">Time (newest)</option></select></label><a class="btn" href="/alerts">Browse alerts by day →</a></span></div><div id="alist"></div></div>
 <div class="card w12"><h2>MITRE ATT&amp;CK techniques · lit when the rule has fired on real data</h2><div class="chips" id="cov"></div></div>
 </main>
 <footer id="foot"></footer>
+<script src="/alerts.js"></script>
 <script>
 "use strict";
 const FIXED_DAY="2026-10-28";
@@ -68,11 +70,9 @@ function render(s){S=s;const t=s.totals,age=(Date.now()-new Date(s.generated_at)
  s.attackers.slice(0,8).forEach(a=>{const tr=el("tr"),ip=el("td","ip",a.ip);ip.title=a.geo?[a.geo.city,a.geo.country].filter(Boolean).join(", "):"";
   const b=el("td","num",fmt(a.sessions+a.ssh_probe_alerts));b.style.color="var(--pu)";tr.append(ip,el("td","",a.geo?a.geo.cc:"··"),b);at.append(tr)});
  bars("#usr",s.usernames);bars("#pwd",s.passwords);
- const n=$("#nota");clear(n);if(!s.notable.length)n.append(el("div","row",'No notable alerts'));
- s.notable.slice(0,6).forEach(a=>{const r=el("div","row"),m=el("span","n",a.text);m.title=a.text;r.append(el("span","sev "+a.severity,a.severity),m,el("span","r",ago(a.time)));n.append(r)});
  const c=$("#cov");clear(c);s.coverage.techniques.forEach(q=>{const x=el("div","chip"+(q.detected?" on":""));x.append(el("b","",q.id),document.createTextNode(" "+q.name));c.append(x)});
  $("#foot").textContent="Read-only public view. Attackers shown are internet scanners hitting a deliberate honeypot and a real SSH port; IP locations come from ipwho.is. Data refreshes every 5 minutes · generated "+s.generated_at.slice(0,16).replace("T"," ")+" UTC.";
- drawMap()}
+ alerts(false);drawMap()}
 function bars(id,list){const n=$(id);clear(n);const mx=Math.max(1,...list.map(x=>x.count));list.slice(0,8).forEach(x=>{const r=el("div","row"),b=el("div","bar"),i=el("i"),sp=el("span","",x.value||"(empty)");i.style.width=Math.max(3,x.count/mx*100)+"%";b.append(i,sp);r.append(b,el("span","r",fmt(x.count)));n.append(r)})}
 function timeline(s){const svg=$("#tl");clear(svg);const d=s.timeline,mx=Math.max(1,...d.map(x=>x.honeypot+x.other)),W=640,H=150,bw=W/d.length,NS="http://www.w3.org/2000/svg";
  const mk=(n,a)=>{const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);svg.append(e);return e};
@@ -84,11 +84,13 @@ function timeline(s){const svg=$("#tl");clear(svg);const d=s.timeline,mx=Math.ma
   const l=mk("text",{x:X-6,y:12,"text-anchor":"end",fill:"#f5a524","font-size":10});l.textContent="Oct 28: log collector fixed. Earlier days had no auth/audit visibility"}
  [0,Math.floor(d.length/2),d.length-1].forEach(i=>{const l=mk("text",{x:Math.min(W-26,Math.max(0,i*bw)),y:166,fill:"#8b98ad","font-size":10});l.textContent=d[i].day.slice(5)});
  const m=mk("text",{x:2,y:H-H*.92-3,fill:"#8b98ad","font-size":10});m.textContent=mx}
+function alerts(force){const r=$("#alist");if(!force&&r.querySelector(".al.open"))return;window.AlertsUI.load(r,{hours:24,sort:$("#asort").value,per_page:15})}
+$("#asort").addEventListener("change",()=>alerts(true));
 let map=null,layer=null,fitted=false;
-function initMap(){if(!window.L){$("#map").textContent="Map library could not be loaded.";return}
- map=L.map("map",{minZoom:2,maxZoom:8,worldCopyJump:true}).setView([25,10],2);
- L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{subdomains:"abcd",maxZoom:19,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}).addTo(map);
- layer=L.layerGroup().addTo(map)}
+async function initMap(){if(!window.L){$("#map").textContent="Map library could not be loaded.";return}
+ map=L.map("map",{minZoom:2,maxZoom:8,worldCopyJump:true}).setView([25,10],2);layer=L.layerGroup().addTo(map);let key="";
+ try{key=(await(await fetch("/config")).json()).map_key||""}catch(e){}
+ L.tileLayer("https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png"+(key?"?key="+encodeURIComponent(key):""),{maxZoom:18,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}).addTo(map);drawMap()}
 function drawMap(){if(!map)return;layer.clearLayers();const mx=Math.max(1,...pins.map(p=>p.n));
  pins.forEach(p=>{const m=L.circleMarker([p.lat,p.lon],{radius:5+11*Math.sqrt(p.n/mx),color:"#fb4d6a",weight:1.5,fillColor:"#fb4d6a",fillOpacity:.5}).addTo(layer);
   const tip=el("div","",p.ip+" · "+(p.place||"unknown")+" · "+fmt(p.n)+" events");m.bindTooltip(tip)});
