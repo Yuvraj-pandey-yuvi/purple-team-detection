@@ -111,7 +111,7 @@ def test_a_source_that_never_delivers_alerts_after_its_limit_not_at_once():
     assert alerts == []
     alerts, state = cycle(cloudtrail_silent, state, 24 * 60 + 5)
     assert sources_of(alerts) == ["cloudtrail"]
-    assert alerts[0].technique == ATTCKTechnique.T1562_002
+    assert alerts[0].technique == ATTCKTechnique.T1562_008
 
 
 def test_unmonitored_sources_are_ignored():

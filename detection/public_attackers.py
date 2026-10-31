@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 
 from detection import public_alerts
 
-TOP_N = 200
+TOP_N = 2000      # effectively every attacker (the detail file stays small: the long tail has tiny records)
 LIST_LIMIT = 8
 COMMAND_LIMIT = 12
 COMMAND_CHARS = 120

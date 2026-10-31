@@ -20,7 +20,7 @@ def detect(events: list[CloudTrailEvent]) -> list[Alert]:
 
         alerts.append(Alert(
             rule_id     = "rule_009_cloudtrail_disabled",
-            technique   = ATTCKTechnique.T1562_002,
+            technique   = ATTCKTechnique.T1562_008,
             severity    = severity,
             timestamp   = datetime.now(timezone.utc),
             first_seen  = event.timestamp,

@@ -186,3 +186,16 @@ def test_geo_entries_cached_before_the_network_field_existed_are_refreshed_once(
     geo_lookup.enrich(["8.8.8.8"], cache, fetch=fetch, now=NOW)
     geo_lookup.enrich(["8.8.8.8"], cache, fetch=fetch, now=NOW)
     assert calls == ["8.8.8.8"] and geo_lookup.load_cache(cache)["8.8.8.8"]["org"] == "Example Net"
+
+
+def test_geo_backs_off_for_an_hour_after_a_rate_limit_and_resumes(tmp_path):
+    cache, calls = str(tmp_path / "g.json"), []
+    def limited(ip): calls.append(ip); raise RateLimited()
+    geo_lookup.enrich(["8.8.8.1", "8.8.8.2"], cache, fetch=limited, now=NOW)
+    assert calls == ["8.8.8.1"]                                                    # stopped at the first 429
+    def good(ip): calls.append(ip); return GOOD
+    found = geo_lookup.enrich(["8.8.8.1"], cache, fetch=good, now=NOW + timedelta(minutes=30))
+    assert calls == ["8.8.8.1"] and found == {}                                    # still backing off: no request
+    found = geo_lookup.enrich(["8.8.8.1"], cache, fetch=good, now=NOW + timedelta(minutes=61))
+    assert calls == ["8.8.8.1", "8.8.8.1"] and set(found) == {"8.8.8.1"}
+    assert geo_lookup.META_KEY not in found and geo_lookup.META_KEY not in geo_lookup.load_cache(cache)

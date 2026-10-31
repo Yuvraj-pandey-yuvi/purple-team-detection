@@ -12,8 +12,8 @@ CATALOG = [
     ("rule_006_root_account_login", "AWS root account login", "T1078.001", "cloudtrail", "Critical", "The all-powerful AWS root account is used to sign in."),
     ("rule_007_brute_force_success", "Brute force that succeeded", "T1110.001", "auth_log", "Critical", "Repeated failures followed by a successful login from the same IP."),
     ("rule_008_cron_persistence", "Scheduled-job persistence", "T1053.003", "auditd", "High to Critical", "A cron job is written, a classic way to survive reboots."),
-    ("rule_009_cloudtrail_disabled", "AWS audit logging switched off", "T1562.002", "cloudtrail", "High to Critical", "CloudTrail is stopped, deleted or changed so actions stop being recorded."),
-    ("rule_010_auditd_tamper", "Linux audit system tampered with", "T1562.001", "auditd", "High to Critical", "The audit daemon or its rules are disabled or changed."),
+    ("rule_009_cloudtrail_disabled", "AWS audit logging switched off", "T1562.008", "cloudtrail", "High to Critical", "CloudTrail is stopped, deleted or changed so actions stop being recorded."),
+    ("rule_010_auditd_tamper", "Linux audit system tampered with", "T1562.012", "auditd", "High to Critical", "The audit daemon or its rules are disabled or changed."),
     ("rule_011_sudoers_tamper", "sudo permissions modified", "T1548", "auditd", "Critical", "The sudoers file is edited, which can grant silent root access."),
     ("rule_012_account_enumeration", "Account enumeration", "T1087.001", "auditd", "High", "A burst of commands that list users and groups."),
     ("rule_013_system_discovery", "System discovery", "T1082", "auditd", "Medium", "A burst of commands that map out the machine."),
@@ -34,3 +34,28 @@ def with_counts(rule_counts: dict) -> list[dict]:
                      "what": what, "total": c.get("total", 0), "last_24h": c.get("last_24h", 0) or 0,
                      "last_seen": c.get("last_seen")})
     return rows
+
+
+# ── ATT&CK matrix data (Enterprise v17) ──────────────────────────────────────
+ATTACK_VERSION = "v17"
+TACTICS = ["Initial Access", "Execution", "Persistence", "Privilege Escalation", "Defense Evasion", "Credential Access", "Discovery"]
+_VALID = ["Initial Access", "Persistence", "Privilege Escalation", "Defense Evasion"]
+TECHNIQUE_TACTICS = {
+    "T1110.001": ["Credential Access"],
+    "T1136.001": ["Persistence"],
+    "T1003.008": ["Credential Access"],
+    "T1036": ["Defense Evasion"],
+    "T1053.003": ["Execution", "Persistence", "Privilege Escalation"],
+    "T1078": _VALID,
+    "T1078.001": _VALID,
+    "T1548": ["Privilege Escalation", "Defense Evasion"],
+    "T1562.008": ["Defense Evasion"],
+    "T1562.012": ["Defense Evasion"],
+    "T1087.001": ["Discovery"],
+    "T1082": ["Discovery"],
+    "T1555": ["Credential Access"],
+}
+
+
+def tactics_of(technique_id: str) -> list[str]:
+    return list(TECHNIQUE_TACTICS.get(technique_id, []))

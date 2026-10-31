@@ -16,12 +16,13 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.responses import FileResponse
 
-from detection import public_alerts
+from detection import public_alerts, public_stats
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 SUMMARY_PATH = os.environ.get("PURPLE_SUMMARY_PATH", str(ROOT / "reports" / "dashboard_summary.json"))
 ATTACKERS_PATH = os.environ.get("PURPLE_ATTACKERS_PATH", str(ROOT / "reports" / "public_attackers.json"))
+STATS_DB = os.environ.get("PURPLE_STATS_DB", str(ROOT / "reports" / "public_stats.db"))
 ALERTS_DB = os.environ.get("PURPLE_ALERTS_DB", str(ROOT / "reports" / "public_alerts.db"))
 MAP_KEY = os.environ.get("PURPLE_MAP_KEY", "")           # CARTO tile key: public by design, kept out of git
 
@@ -112,6 +113,17 @@ def alert(alert_id: str):
     if not found:
         raise HTTPException(status_code=404, detail="no such alert")
     return _json(found)
+
+
+@app.get("/api/stats")
+def stats(day: str = "all"):
+    try:
+        row = public_stats.get(STATS_DB, day)
+    except Exception:
+        raise HTTPException(status_code=503, detail="statistics not ready")
+    if row is None:
+        raise HTTPException(status_code=404, detail="no statistics for that day")
+    return _json(row)
 
 
 @app.get("/api/attackers/{ip}")

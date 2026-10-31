@@ -36,7 +36,7 @@ SOURCES = {
     },
     "cloudtrail": {
         "limit": timedelta(hours=24), "log_source": LogSource.CLOUDTRAIL,
-        "technique": ATTCKTechnique.T1562_002, "severity": Severity.MEDIUM,
+        "technique": ATTCKTechnique.T1562_008, "severity": Severity.MEDIUM,
     },
 }
 

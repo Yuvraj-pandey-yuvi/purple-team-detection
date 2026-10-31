@@ -38,7 +38,7 @@ def detect(events: list[AuditdEvent]) -> list[Alert]:
 
         alerts.append(Alert(
             rule_id     = "rule_010_auditd_tamper",
-            technique   = ATTCKTechnique.T1562_001,
+            technique   = ATTCKTechnique.T1562_012,
             severity    = severity,
             timestamp   = datetime.now(timezone.utc),
             first_seen  = event.timestamp,

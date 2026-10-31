@@ -49,7 +49,7 @@ def test_detail_has_geo_logins_commands_and_rule_counts(db, tmp_path):
     assert d[A]["sessions"] == 5 and d[A]["login_attempts"] == 5 and d[A]["cc"] == "CN" and d[A]["network"] == "Cloud Co"
     assert d[A]["rules"] == [{"rule_id": "rule_015_cowrie_login", "count": 2}]
     assert d[C]["country"] is None and d[C]["network"] is None                    # unlocated IPs still get a record
-    assert agg["geo_coverage"] == {"top_n": 200, "total_sessions": 9, "located_sessions": 8}
+    assert agg["geo_coverage"] == {"top_n": pat.TOP_N, "total_sessions": 9, "located_sessions": 8}
 
 
 def test_owner_alerts_are_not_counted_per_ip(db, tmp_path):

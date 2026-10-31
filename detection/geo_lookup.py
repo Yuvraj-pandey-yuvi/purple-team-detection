@@ -20,6 +20,8 @@ from datetime import datetime, timedelta, timezone
 
 API_URL = "https://ipwho.is/{ip}?fields=success,message,latitude,longitude,city,country,country_code,connection"
 RETRY_AFTER = timedelta(hours=1)      # do not hammer an IP whose lookup failed
+BACKOFF = timedelta(hours=1)          # after HTTP 429, stop asking the service for this long
+META_KEY = "__rate_limited_until__"   # stored in the cache file next to the IPs
 MAX_NEW_PER_CYCLE = 20               # stays far below the free daily limit
 TIMEOUT_SECONDS = 4
 
@@ -90,6 +92,12 @@ def enrich(ips, cache_path: str, fetch=fetch_ipwho, max_new: int = MAX_NEW_PER_C
     cache = load_cache(cache_path)
     looked_up = 0
     changed = False
+    until = cache.get(META_KEY)
+    if until:
+        if now < datetime.fromisoformat(until):
+            return _located(cache)                     # still backing off: no requests at all
+        del cache[META_KEY]
+        changed = True
 
     for ip in ips:
         if not is_public_ip(ip):
@@ -107,10 +115,16 @@ def enrich(ips, cache_path: str, fetch=fetch_ipwho, max_new: int = MAX_NEW_PER_C
         try:
             result = fetch(ip)
         except RateLimited:
+            cache[META_KEY] = (now + BACKOFF).isoformat()   # be polite: wait before asking again
+            changed = True
             break                                      # stop for this cycle, keep what we have
         cache[ip] = result if result else {"failed_at": now.isoformat()}
         changed = True
 
     if changed:
         save_cache(cache_path, cache)
-    return {ip: entry for ip, entry in cache.items() if "lat" in entry}
+    return _located(cache)
+
+
+def _located(cache: dict) -> dict:
+    return {ip: entry for ip, entry in cache.items() if isinstance(entry, dict) and "lat" in entry}

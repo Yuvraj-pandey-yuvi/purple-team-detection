@@ -21,7 +21,7 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 
 from rules.rule_018_collector_heartbeat import SOURCES as HEARTBEAT_SOURCES
-from detection import public_alerts, public_attackers, rule_catalog
+from detection import public_alerts, public_attackers, public_stats, rule_catalog
 
 WINDOW_HOURS = 24
 TOP_ATTACKERS = 25
@@ -238,7 +238,9 @@ def build_summary(alerts, coverage, heartbeat_state, db_path: str, geo: dict, no
                 "id": getattr(t.technique, "value", str(t.technique)), "name": clean_text(t.name, 60),
                 "detected": t.detected, "alerts": t.alert_count,
                 "source": getattr(t.log_source, "value", str(t.log_source)) if t.log_source else None,
+                "tactics": rule_catalog.tactics_of(getattr(t.technique, "value", str(t.technique))),
             } for t in coverage.techniques],
+            "attack_version": rule_catalog.ATTACK_VERSION, "tactics": rule_catalog.TACTICS,
         },
     }
 
@@ -287,5 +289,14 @@ def publish(alerts, coverage, reports_dir, heartbeat_state=None, geo_enabled: bo
                                               os.path.join(reports_dir, "public_attackers.json"), now))
     except Exception as error:                            # the extra panels degrade; the rest of the page does not
         summary["warnings"].append(f"attacker details failed: {clean_text(error, 120)}")
+    try:
+        summary.update(public_stats.build(os.path.join(reports_dir, "cowrie.db"), geo,
+                                          os.path.join(reports_dir, "public_stats.db"), now))
+    except Exception as error:                            # the date picker degrades; the rest of the page does not
+        summary["warnings"].append(f"daily statistics failed: {clean_text(error, 120)}")
+    detection_rules = [r for r in summary["rules"] if r["source"] != "pipeline"]
+    fired = sum(1 for r in detection_rules if r["total"] > 0)
+    summary.setdefault("findings", []).append(
+        {"stat": f"{fired} of {len(detection_rules)}", "text": "detection rules have fired on real traffic so far. The rest have not met a real trigger yet."})
     write_summary(summary, os.path.join(reports_dir, "dashboard_summary.json"))
     return summary

@@ -168,6 +168,10 @@ class TechniqueStatus(BaseModel):
     alert_count: int = 0
     log_source: Optional[LogSource] = None
 
+# Used only to label pipeline-health alerts (rule_018): no detection rule targets them, so they are
+# not part of the coverage list (they would otherwise show as "never detected" forever).
+PIPELINE_ONLY_TECHNIQUES = {ATTCKTechnique.T1562_001}
+
 TECHNIQUE_NAMES: dict[ATTCKTechnique, str] = {
     ATTCKTechnique.T1110_001: "Brute Force: Password Guessing",
     ATTCKTechnique.T1136_001: "Create Local Account",
@@ -177,8 +181,9 @@ TECHNIQUE_NAMES: dict[ATTCKTechnique, str] = {
     ATTCKTechnique.T1078:     "Valid Accounts (No MFA)",
     ATTCKTechnique.T1078_001: "Valid Accounts: Root Login",
     ATTCKTechnique.T1548:     "Abuse Elevation Control",
-    ATTCKTechnique.T1562_001: "Impair Defenses: Disable auditd",
-    ATTCKTechnique.T1562_002: "Impair Defenses: Disable CloudTrail",
+    ATTCKTechnique.T1562_001: "Impair Defenses: Disable or Modify Tools",
+    ATTCKTechnique.T1562_008: "Impair Defenses: Disable CloudTrail",
+    ATTCKTechnique.T1562_012: "Impair Defenses: Disable auditd",
     ATTCKTechnique.T1087_001: "Account Discovery: Local Account",
     ATTCKTechnique.T1082:     "System Information Discovery",
     ATTCKTechnique.T1555:     "Credentials from password stores "
@@ -207,8 +212,8 @@ class CoverageSummary(BaseModel):
         Call this in your report generator instead of computing
         coverage manually in multiple places.
         """
-        all_techniques = list(ATTCKTechnique)
-        detected_set: set[ATTCKTechnique] = {a.technique for a in alerts}
+        all_techniques = [t for t in ATTCKTechnique if t not in PIPELINE_ONLY_TECHNIQUES]
+        detected_set: set[ATTCKTechnique] = {a.technique for a in alerts} & set(all_techniques)
         
         technique_alert_counts: dict[ATTCKTechnique, int] = {}
         technique_sources: dict[ATTCKTechnique, LogSource] = {}

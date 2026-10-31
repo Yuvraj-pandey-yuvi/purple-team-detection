@@ -69,7 +69,8 @@ class ATTCKTechnique(str, Enum):
     T1053_003 = "T1053.003"   # Scheduled Task: Cron
     T1078     = "T1078"       # Valid Accounts
     T1078_001 = "T1078.001"   # Valid Accounts: Default Accounts (Root)
-    T1562_002 = "T1562.002"   # Impair Defenses: Disable Cloud Logs
+    T1562_008 = "T1562.008"   # Impair Defenses: Disable or Modify Cloud Logs (ATT&CK v17)
+    T1562_012 = "T1562.012"   # Impair Defenses: Disable or Modify Linux Audit System (ATT&CK v17)
     T1562_001 = "T1562.001"   # Impair Defenses: Disable or Modify Tools
     T1087_001 = "T1087.001"   # Account Discovery: Local Account
     T1082     = "T1082"       # System Information Discovery

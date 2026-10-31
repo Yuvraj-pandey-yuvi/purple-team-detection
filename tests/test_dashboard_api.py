@@ -111,3 +111,20 @@ def test_attacker_detail_endpoint(client, tmp_path, monkeypatch):
     path.unlink()
     api._attackers_cache.update(mtime=None, data={})
     assert c.get("/api/attackers/9.9.9.9").status_code == 503
+
+
+def test_stats_endpoint(client, tmp_path, monkeypatch):
+    import sqlite3, dashboard.api as api
+    path = tmp_path / "public_stats.db"
+    c = sqlite3.connect(path)
+    c.executescript("CREATE TABLE stats (day TEXT PRIMARY KEY, data TEXT NOT NULL); CREATE TABLE meta (key TEXT, value TEXT);")
+    c.execute("INSERT INTO stats VALUES ('all', ?), ('2026-10-30', ?)", (json.dumps({"day": "all", "sessions": 5}), json.dumps({"day": "2026-10-30", "sessions": 3})))
+    c.commit(); c.close()
+    monkeypatch.setattr(api, "STATS_DB", str(path))
+    cl, _, _ = client
+    assert cl.get("/api/stats").json()["sessions"] == 5                            # default is all time
+    assert cl.get("/api/stats?day=2026-10-30").json()["sessions"] == 3
+    assert cl.get("/api/stats?day=2026-01-01").status_code == 404
+    assert cl.get("/api/stats", params={"day": "x' OR '1'='1"}).status_code == 404
+    path.unlink()
+    assert cl.get("/api/stats").status_code == 503
