@@ -18,7 +18,7 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
-API_URL = "https://ipwho.is/{ip}?fields=success,message,latitude,longitude,city,country,country_code"
+API_URL = "https://ipwho.is/{ip}?fields=success,message,latitude,longitude,city,country,country_code,connection"
 RETRY_AFTER = timedelta(hours=1)      # do not hammer an IP whose lookup failed
 MAX_NEW_PER_CYCLE = 20               # stays far below the free daily limit
 TIMEOUT_SECONDS = 4
@@ -54,6 +54,8 @@ def fetch_ipwho(ip: str) -> dict | None:
             "city": str(data.get("city") or "")[:60],
             "country": str(data.get("country") or "")[:60],
             "cc": str(data.get("country_code") or "")[:2],
+            "org": str((data.get("connection") or {}).get("org") or (data.get("connection") or {}).get("isp") or "")[:80],
+            "asn": str((data.get("connection") or {}).get("asn") or "")[:12],
         }
     except (KeyError, TypeError, ValueError):
         return None
@@ -93,8 +95,8 @@ def enrich(ips, cache_path: str, fetch=fetch_ipwho, max_new: int = MAX_NEW_PER_C
         if not is_public_ip(ip):
             continue
         entry = cache.get(ip)
-        if entry and "lat" in entry:
-            continue                                   # already located: never ask again
+        if entry and "lat" in entry and "org" in entry:
+            continue                                   # fully known: never ask again (older entries lack "org" and are refreshed)
         if entry and "failed_at" in entry:
             failed_at = datetime.fromisoformat(entry["failed_at"])
             if now - failed_at < RETRY_AFTER:

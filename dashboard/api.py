@@ -7,6 +7,7 @@ by the engine, both already stripped of raw logs for internal sources, of the ow
 activity, and masked). No write endpoints, no access to alerts.json. The pod also mounts
 the volume read-only, so the rule is enforced twice.
 """
+import ipaddress
 import json
 import os
 from datetime import datetime, timedelta, timezone
@@ -20,8 +21,11 @@ from detection import public_alerts
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 SUMMARY_PATH = os.environ.get("PURPLE_SUMMARY_PATH", str(ROOT / "reports" / "dashboard_summary.json"))
+ATTACKERS_PATH = os.environ.get("PURPLE_ATTACKERS_PATH", str(ROOT / "reports" / "public_attackers.json"))
 ALERTS_DB = os.environ.get("PURPLE_ALERTS_DB", str(ROOT / "reports" / "public_alerts.db"))
 MAP_KEY = os.environ.get("PURPLE_MAP_KEY", "")           # CARTO tile key: public by design, kept out of git
+
+_attackers_cache = {"mtime": None, "data": {}}
 
 app = FastAPI(title="Purple Team Detection", docs_url=None, redoc_url=None, openapi_url=None)
 
@@ -107,6 +111,25 @@ def alert(alert_id: str):
     found = _db(public_alerts.get_alert, alert_id)
     if not found:
         raise HTTPException(status_code=404, detail="no such alert")
+    return _json(found)
+
+
+@app.get("/api/attackers/{ip}")
+def attacker(ip: str):
+    try:
+        ip = str(ipaddress.ip_address(ip))
+    except ValueError:
+        raise HTTPException(status_code=404, detail="not an IP address")
+    try:
+        mtime = os.stat(ATTACKERS_PATH).st_mtime
+        if _attackers_cache["mtime"] != mtime:                 # reload only when the engine wrote a new file
+            with open(ATTACKERS_PATH) as f:
+                _attackers_cache.update(mtime=mtime, data=json.load(f).get("attackers", {}))
+    except (OSError, ValueError):
+        raise HTTPException(status_code=503, detail="attacker details not ready")
+    found = _attackers_cache["data"].get(ip)
+    if not found:
+        raise HTTPException(status_code=404, detail="no details for this IP (only the most active attackers are listed)")
     return _json(found)
 
 

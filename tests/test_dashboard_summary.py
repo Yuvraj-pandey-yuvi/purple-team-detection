@@ -128,7 +128,7 @@ def test_summary_is_small_and_written_atomically(tmp_path, honeypot_db):
 
 # ── geolocation ────────────────────────────────────────────────────────────────
 
-GOOD = {"lat": 47.0, "lon": 28.8, "city": "Chisinau", "country": "Moldova", "cc": "MD"}
+GOOD = {"lat": 47.0, "lon": 28.8, "city": "Chisinau", "country": "Moldova", "cc": "MD", "org": "Example Net", "asn": "AS1"}
 
 
 def test_geo_looks_up_once_then_serves_from_cache(tmp_path):
@@ -177,3 +177,12 @@ def test_geo_corrupt_cache_file_is_replaced_not_fatal(tmp_path):
     path = tmp_path / "g.json"
     path.write_text("{ broken")
     assert geo_lookup.enrich(["8.8.8.8"], str(path), fetch=lambda ip: GOOD, now=NOW)["8.8.8.8"]["cc"] == "MD"
+
+
+def test_geo_entries_cached_before_the_network_field_existed_are_refreshed_once(tmp_path):
+    cache, calls = str(tmp_path / "g.json"), []
+    geo_lookup.save_cache(cache, {"8.8.8.8": {"lat": 1.0, "lon": 2.0, "city": "X", "country": "Y", "cc": "YY"}})   # old format
+    def fetch(ip): calls.append(ip); return GOOD
+    geo_lookup.enrich(["8.8.8.8"], cache, fetch=fetch, now=NOW)
+    geo_lookup.enrich(["8.8.8.8"], cache, fetch=fetch, now=NOW)
+    assert calls == ["8.8.8.8"] and geo_lookup.load_cache(cache)["8.8.8.8"]["org"] == "Example Net"

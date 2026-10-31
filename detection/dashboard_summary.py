@@ -21,7 +21,7 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 
 from rules.rule_018_collector_heartbeat import SOURCES as HEARTBEAT_SOURCES
-from detection import public_alerts
+from detection import public_alerts, public_attackers, rule_catalog
 
 WINDOW_HOURS = 24
 TOP_ATTACKERS = 25
@@ -264,10 +264,12 @@ def publish(alerts, coverage, reports_dir, heartbeat_state=None, geo_enabled: bo
     from detection import geo_lookup                      # local import keeps the module light
     reports_dir = str(reports_dir)
     summary = build_summary(alerts, coverage, heartbeat_state, os.path.join(reports_dir, "cowrie.db"), {}, now)
+    geo = {}
     if geo_enabled:
         try:
-            geo = geo_lookup.enrich([row["ip"] for row in summary["attackers"]],
-                                    os.path.join(reports_dir, "geo_cache.json"), now=now)
+            wanted = list(dict.fromkeys(public_attackers.top_ips(os.path.join(reports_dir, "cowrie.db"))
+                                        + [row["ip"] for row in summary["attackers"]]))   # busiest first
+            geo = geo_lookup.enrich(wanted, os.path.join(reports_dir, "geo_cache.json"), now=now)
             attach_geo(summary, geo)
         except Exception as error:                        # a geo problem must never cost us the summary
             summary["warnings"].append(f"geolocation failed: {clean_text(error, 120)}")
@@ -279,5 +281,11 @@ def publish(alerts, coverage, reports_dir, heartbeat_state=None, geo_enabled: bo
     except Exception as error:                            # the alerts page degrades; the engine carries on
         summary["warnings"].append(f"public alert store failed: {clean_text(error, 120)}")
         summary["rule_counts"] = {}
+    summary["rules"] = rule_catalog.with_counts(summary["rule_counts"])
+    try:
+        summary.update(public_attackers.build(os.path.join(reports_dir, "cowrie.db"), geo, alerts,
+                                              os.path.join(reports_dir, "public_attackers.json"), now))
+    except Exception as error:                            # the extra panels degrade; the rest of the page does not
+        summary["warnings"].append(f"attacker details failed: {clean_text(error, 120)}")
     write_summary(summary, os.path.join(reports_dir, "dashboard_summary.json"))
     return summary

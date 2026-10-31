@@ -95,3 +95,19 @@ def test_missing_data_is_a_503_not_a_crash(client):
 def test_old_endpoints_docs_and_writes_are_gone(client, method, path):
     c, _, _ = client
     assert getattr(c, method)(path).status_code in (404, 405)
+
+
+def test_attacker_detail_endpoint(client, tmp_path, monkeypatch):
+    import dashboard.api as api
+    path = tmp_path / "public_attackers.json"
+    path.write_text(json.dumps({"attackers": {"9.9.9.9": {"ip": "9.9.9.9", "sessions": 3}}}))
+    monkeypatch.setattr(api, "ATTACKERS_PATH", str(path))
+    api._attackers_cache.update(mtime=None, data={})
+    c, _, _ = client
+    assert c.get("/api/attackers/9.9.9.9").json()["sessions"] == 3
+    assert c.get("/api/attackers/8.8.8.8").status_code == 404                  # not among the listed attackers
+    assert c.get("/api/attackers/not-an-ip").status_code == 404
+    assert c.get("/api/attackers/9.9.9.9' OR 1=1").status_code == 404
+    path.unlink()
+    api._attackers_cache.update(mtime=None, data={})
+    assert c.get("/api/attackers/9.9.9.9").status_code == 503
