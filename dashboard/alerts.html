@@ -28,12 +28,12 @@ const UI=window.AlertsUI,$=s=>document.querySelector(s),P=new URLSearchParams(lo
 const st={day:P.get("day")||"24h",sort:P.get("sort")==="time"?"time":"priority",rule:P.get("rule")||"",page:Math.max(1,+P.get("page")||1)};
 const opt=(v,t)=>{const o=document.createElement("option");o.value=v;o.textContent=t;return o};
 function sync(){const q=new URLSearchParams({day:st.day,sort:st.sort,page:st.page});if(st.rule)q.set("rule",st.rule);history.replaceState(null,"","?"+q)}
-async function refresh(){sync();const q={sort:st.sort,page:st.page,per_page:50};if(st.day==="24h")q.hours=24;else q.day=st.day;if(st.rule)q.rule=st.rule;
- $("#lt").textContent=(st.day==="24h"?"Alerts · last 24 hours":"Alerts · "+st.day)+(st.rule?" · "+st.rule:"");
+async function refresh(){sync();const q={sort:st.sort,page:st.page,per_page:50};if(st.day==="24h")q.hours=24;else if(st.day!=="all")q.day=st.day;if(st.rule)q.rule=st.rule;
+ $("#lt").textContent=(st.day==="24h"?"Alerts · last 24 hours":st.day==="all"?"Alerts · all time":"Alerts · "+st.day)+(st.rule?" · "+st.rule:"");
  await UI.load($("#list"),q,{onPage:p=>{st.page=p;refresh();window.scrollTo({top:0,behavior:"smooth"})}})}
 async function init(){let days,rules;
  try{[days,rules]=await Promise.all([UI.getJSON("/api/days"),UI.getJSON("/api/rules")])}catch(e){$("#list").textContent="Alerts are not available right now ("+e.message+").";return}
- const ds=$("#day");ds.append(opt("24h","Last 24 hours"));days.forEach(d=>ds.append(opt(d.day,d.day+"  ·  "+UI.fmt(d.count)+" alerts")));
+ const ds=$("#day");ds.append(opt("24h","Last 24 hours"));ds.append(opt("all","All time"));days.forEach(d=>ds.append(opt(d.day,d.day+"  ·  "+UI.fmt(d.count)+" alerts")));
  if(![...ds.options].some(o=>o.value===st.day))st.day="24h";ds.value=st.day;$("#sort").value=st.sort;
  const names=Object.keys(rules).sort((a,b)=>rules[b].total-rules[a].total),rs=$("#rule");rs.append(opt("","All rules"));
  names.forEach(r=>rs.append(opt(r,r+"  ("+UI.fmt(rules[r].total)+")")));if(!names.includes(st.rule))st.rule="";rs.value=st.rule;
