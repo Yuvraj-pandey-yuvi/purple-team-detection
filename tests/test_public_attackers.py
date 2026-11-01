@@ -71,6 +71,7 @@ def test_commands_are_explained_defanged_and_binary_is_never_printed(db, tmp_pat
     assert "Prints “ok”" in top['echo -e "\\x6F\\x6B"']["meaning"]
     dropper = next(v for v in top if "wget" in v)
     assert "hxxp://evil.example" in dropper and "http://" not in dropper
+    assert "spot honeypots" in top['echo -e "\\x6F\\x6B"']["meaning"] and pat.meaning_of("cat /proc/cpuinfo") == "Reads CPU details."
     assert "dropper" in top[dropper]["meaning"] and top["uname -a"]["meaning"] == "Fingerprints the operating system."
     assert any(v.startswith("(binary payload") for v in top) and "ELF" not in json.dumps(agg["commands"])
 

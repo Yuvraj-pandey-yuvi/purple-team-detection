@@ -28,6 +28,9 @@ table{width:100%;border-collapse:collapse;font-size:13px}th{color:var(--m);font-
 tr.cl{cursor:pointer}tr.cl:hover td{background:#131c2c}.rt td{vertical-align:top}.rt a{color:var(--pu)}
 .dr{position:fixed;inset:0;background:#05080ecc;display:none;z-index:1000;justify-content:flex-end}.dr.on{display:flex}.dp{width:min(520px,100%);height:100%;overflow:auto;background:#0e1522;border-left:1px solid var(--b);padding:20px}.dp h3{margin:0 0 4px;font:600 18px ui-monospace,Menlo,monospace}.dp h4{margin:16px 0 6px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--m)}
 .dx{float:right;background:none;border:1px solid #2a3556;color:var(--t);border-radius:8px;padding:4px 10px;cursor:pointer;font:inherit}.st{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.st div{background:#0c121d;border:1px solid var(--b);border-radius:8px;padding:8px 10px}.st b{display:block;font-size:18px}.st span{color:var(--m);font-size:11px}
+.hero p{margin:0 0 14px;max-width:920px;font-size:15px;line-height:1.6}.fg{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.fg div{background:#0c121d;border:1px solid var(--b);border-radius:10px;padding:12px 14px}.fg b{display:block;font-size:30px;color:var(--pu);letter-spacing:-.02em}.fg span{color:var(--m);font-size:13px}
+.sb{color:var(--pu);text-transform:none;letter-spacing:0;font-weight:500}.sc .ex{margin:2px 0 0}
+.mx{display:grid;grid-template-columns:repeat(7,minmax(135px,1fr));gap:10px;overflow-x:auto}.mx h3{margin:0 0 8px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--m)}.tq{border:1px solid var(--b);border-radius:8px;padding:6px 8px;margin-bottom:6px;font-size:12px;color:var(--m)}.tq.on{border-color:#1f7a5a;background:#0f2a24;color:var(--t)}.tq b{display:block;font-family:ui-monospace,Menlo,monospace;color:var(--m)}.tq.on b{color:var(--gr)}
 .leg{display:flex;gap:16px;color:var(--m);font-size:12px;margin-top:6px}.leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}
 #err{display:none;margin:12px 24px;padding:10px 14px;border:1px solid var(--rd);border-radius:8px;color:#ffb3c0}
 footer{color:var(--m);font-size:12px;padding:8px 24px 28px;max-width:1400px;margin:auto}
@@ -38,21 +41,25 @@ footer{color:var(--m);font-size:12px;padding:8px 24px 28px;max-width:1400px;marg
 <nav style="display:inline-block"><a href="https://github.com/Yuvraj-pandey-yuvi/purple-team-detection" target="_blank" rel="noopener noreferrer">GitHub</a><a href="https://www.linkedin.com/in/yuvraj-pandey-797401337" target="_blank" rel="noopener noreferrer">LinkedIn</a><a href="https://medium.com/@yuvrajpandeyfaltu/how-i-built-a-purple-team-detection-pipeline-that-caught-real-attackers-as-a-2nd-year-cs-student-b30c69d65ddd" target="_blank" rel="noopener noreferrer">Write-up</a></nav></div></header>
 <div id="err"></div>
 <main>
+<div class="card w12 hero"><h2>What you are looking at</h2><p>This is a live security system I built and run on AWS. A <b>honeypot</b>, a decoy server that looks vulnerable, so every visitor is an attacker, collects real attacks from the internet. A detection engine checks logs from the server, the honeypot and AWS against 18 rules mapped to <b>MITRE ATT&amp;CK</b>. Everything below is real data, refreshed every 5 minutes.</p><div class="fg" id="fnd"></div></div>
 <div class="card k"><h2>Honeypot sessions · 24h</h2><div class="v" id="k1">–</div><div class="s" id="k1s"></div></div>
 <div class="card k"><h2>Unique attackers · 24h</h2><div class="v" id="k2">–</div><div class="s" id="k2s"></div></div>
 <div class="card k"><h2>Alerts · 24h</h2><div class="v" id="k3">–</div><div class="s" id="k3s"></div></div>
 <div class="card k"><h2>ATT&amp;CK coverage</h2><div class="v" id="k4">–</div><div class="s" id="k4s"></div></div>
-<div class="card w8"><h2>Where attackers connect from</h2><div id="map"></div></div>
+<div class="card w12 sc"><div class="ah"><h2>Attacker statistics</h2><span class="actl"><label>Show <select id="scope"></select></label><button class="btn" id="screset" style="display:none">Back to all time</button><a class="btn" id="sca" href="/alerts" style="display:none">Alerts for this day →</a></span></div><div class="ex" id="scn"></div></div>
+<div class="card w8"><h2>Where attackers connect from<span class="sb"></span></h2><div id="map"></div><div class="ex">Locations are approximate (estimated from IP addresses). Click a dot for details.</div></div>
+<div class="card w4"><h2>Most active attackers<span class="sb"></span></h2><table><tbody id="att"></tbody></table><div class="ex">Click an attacker for details.</div></div>
+<div class="card w4"><h2>When attacks happen (UTC hour)<span class="sb"></span></h2><svg id="hrs" viewBox="0 0 320 128" width="100%" role="img" aria-label="Sessions by hour of day"></svg><div class="ex">A few automated sources dominate, so this shows their schedule more than attackers in general.</div></div>
+<div class="card w4"><h2>Attacks by country<span class="sb"></span></h2><div id="cty"></div><div class="ex" id="ctys"></div></div>
+<div class="card w4"><h2>Attacks by network<span class="sb"></span></h2><div id="net"></div></div>
+<div class="card w4"><h2>Usernames tried<span class="sb"></span></h2><div id="usr"></div></div>
+<div class="card w4"><h2>Passwords tried<span class="sb"></span></h2><div id="pwd"></div></div>
+<div class="card w4"><h2>What attackers ran after getting in<span class="sb"></span></h2><div id="cmd"></div><div class="ex" id="cmds"></div><div class="ex">Explanations are written by hand from public honeypot research. Commands not on the list have none.</div></div>
+<div class="card w8"><h2>Last 30 days · click a day to filter the statistics above</h2><svg id="tl" viewBox="0 0 640 170" width="100%" role="img" aria-label="Daily honeypot sessions and alerts"></svg><div class="leg"><span><i style="background:var(--pu)"></i>honeypot sessions</span><span><i style="background:var(--cy)"></i>detection alerts</span></div></div>
 <div class="card w4"><h2>Pipeline health</h2><div id="pipe"></div></div>
-<div class="card w8"><h2>Last 30 days</h2><svg id="tl" viewBox="0 0 640 170" width="100%" role="img" aria-label="Daily honeypot sessions and alerts"></svg><div class="leg"><span><i style="background:var(--pu)"></i>honeypot sessions</span><span><i style="background:var(--cy)"></i>detection alerts</span></div></div>
-<div class="card w4"><h2>Most active attackers · click one for details</h2><table><tbody id="att"></tbody></table></div>
-<div class="card w6"><h2>Usernames tried</h2><div id="usr"></div></div>
-<div class="card w6"><h2>Passwords tried</h2><div id="pwd"></div></div>
-<div class="card w4"><h2>Attacks by country</h2><div id="cty"></div><div class="ex" id="ctys"></div></div>
-<div class="card w4"><h2>Attacks by network</h2><div id="net"></div></div>
-<div class="card w4"><h2>What attackers ran after getting in</h2><div id="cmd"></div><div class="ex" id="cmds"></div></div>
+<div class="card w12"><h2>Who attacked when · the 8 most active attackers, all time</h2><svg id="cp" viewBox="0 0 900 200" width="100%" role="img" aria-label="Attacker activity by day"></svg><div class="ex" id="cpn"></div></div>
 <div class="card w12"><div class="ah"><h2>Alerts · last 24 hours</h2><span class="actl"><label>Sort by <select id="asort"><option value="priority">Priority</option><option value="time">Time (newest)</option></select></label><a class="btn" href="/alerts">Browse alerts by day →</a></span></div><div id="alist"></div></div>
-<div class="card w12"><h2>MITRE ATT&amp;CK techniques · lit when the rule has fired on real data</h2><div class="chips" id="cov"></div></div>
+<div class="card w12"><h2>MITRE ATT&amp;CK matrix<span class="sb" id="mxv"></span></h2><div class="mx" id="mx"></div></div>
 <div class="card w12"><h2>Detection rules · how often each has fired (click a rule name to see its alerts)</h2><div style="overflow-x:auto"><table class="rt"><thead><tr><th>Rule</th><th>ID</th><th>ATT&amp;CK</th><th>Source</th><th style="text-align:right">Fired</th><th style="text-align:right">Last 24 h</th><th>Last fired</th></tr></thead><tbody id="rl"></tbody></table></div></div>
 </main>
 <div class="dr" id="dr"><div class="dp"><button class="dx" id="dx">Close ✕</button><div id="drb"></div></div></div>
@@ -71,32 +78,60 @@ function render(s){S=s;const t=s.totals,age=(Date.now()-new Date(s.generated_at)
  $("#dot").className="dot "+(age<15?"ok":"warn");$("#status").textContent=(age<15?"LIVE":"STALE")+" · updated "+ago(s.generated_at);
  kpi(1,fmt(t.honeypot_sessions_24h),fmt(t.honeypot_sessions_total)+" all time");kpi(2,fmt(t.attackers_24h),fmt(t.attackers_total)+" all time");
  kpi(3,fmt(t.alerts_24h),t.critical_24h+" critical · "+t.high_24h+" high");kpi(4,s.coverage.pct+"%",s.coverage.detected+" of "+s.coverage.total+" techniques fired");
- pins=(s.map&&s.map.length)?s.map.map(p=>({ip:p.ip,lat:p.lat,lon:p.lon,place:p.cc||"",n:p.sessions})):s.attackers.filter(a=>a.geo).map(a=>({ip:a.ip,lat:a.geo.lat,lon:a.geo.lon,place:[a.geo.city,a.geo.country].filter(Boolean).join(", "),n:a.sessions+a.ssh_probe_alerts}));
  const p=$("#pipe");clear(p);s.pipeline.forEach(r=>{const row=el("div","row"),d=el("span","dot "+({ok:"ok",waiting:"warn",silent:"bad"}[r.status]||""));
   row.append(d,el("span","n",r.source.replace("_"," ")),el("span","r",{ok:"last input "+ago(r.last_input),waiting:"waiting for first input",silent:"silent "+r.silent_hours+" h",not_monitored:"not monitored",unknown:"unknown"}[r.status]));p.append(row)});
  timeline(s);
- const at=$("#att");clear(at);const mx=Math.max(1,...s.attackers.map(a=>a.sessions));
- s.attackers.slice(0,8).forEach(a=>{const tr=el("tr","cl"),ip=el("td","ip",a.ip);tr.onclick=()=>openAttacker(a.ip);ip.title=a.geo?[a.geo.city,a.geo.country].filter(Boolean).join(", "):"";
-  const b=el("td","num",fmt(a.sessions+a.ssh_probe_alerts));b.style.color="var(--pu)";tr.append(ip,el("td","",a.geo?a.geo.cc:"··"),b);at.append(tr)});
- bars("#usr",s.usernames);bars("#pwd",s.passwords);panels(s);
- const c=$("#cov");clear(c);s.coverage.techniques.forEach(q=>{const x=el("div","chip"+(q.detected?" on":""));x.append(el("b","",q.id),document.createTextNode(" "+q.name));c.append(x)});
- $("#foot").textContent="Read-only public view. Attackers shown are internet scanners hitting a deliberate honeypot and a real SSH port; IP locations come from ipwho.is. Data refreshes every 5 minutes · generated "+s.generated_at.slice(0,16).replace("T"," ")+" UTC.";
- alerts(false);drawMap()}
-function panels(s){const cov=s.geo_coverage,pct=cov&&cov.total_sessions?Math.round(100*cov.located_sessions/cov.total_sessions):0;
- bars("#cty",(s.countries||[]).map(c=>({value:c.country+" ("+c.cc+")",count:c.sessions})));
- $("#ctys").textContent=cov?pct+"% of all honeypot sessions come from the "+cov.top_n+" most active attackers that could be located. The rest is a long tail of single scanners.":"";
- bars("#net",(s.networks||[]).map(n=>({value:n.network,count:n.sessions})));if(!(s.networks||[]).length)$("#net").textContent="Network owners are still being collected…";
- const c=s.commands,box=$("#cmd");clear(box);
- if(!c||!c.total){box.textContent="No commands recorded yet."}else{
-  c.top.forEach(x=>{const r=el("div","row"),t=el("div","n cmd",x.value);t.title=x.value;r.append(t,el("span","r",fmt(x.count)));box.append(r);if(x.meaning)box.append(el("div","ex",x.meaning))});
-  $("#cmds").textContent=fmt(c.total)+" commands in "+fmt(c.sessions_with_commands)+" of "+fmt(c.sessions_total)+" sessions ("+Math.round(100*c.sessions_with_commands/Math.max(1,c.sessions_total))+"%), but only "+c.distinct+" different ones."}
- const rl=$("#rl");clear(rl);(s.rules||[]).forEach(r=>{const tr=el("tr"),nm=el("td"),id=el("td","ip");
+ rulesTable(s);findings(s);campaigns(s);scopeInit(s);
+ matrix(s);
+ $("#foot").textContent="Read-only public view. Attackers shown are internet scanners hitting a deliberate honeypot and a real SSH port; IP locations are approximate estimates from ipwho.is. Data refreshes every 5 minutes · generated "+s.generated_at.slice(0,16).replace("T"," ")+" UTC.";
+ alerts(false)}
+const $$=s=>[...document.querySelectorAll(s)];let scope="all",STATS=null,drawnScope=null;
+function rulesTable(s){const rl=$("#rl");clear(rl);(s.rules||[]).forEach(r=>{const tr=el("tr"),nm=el("td"),id=el("td","ip");
   if(r.total>0){const a=el("a","",r.name);a.href="/alerts?day=all&sort=time&rule="+encodeURIComponent(r.id);nm.append(a)}else nm.append(el("div","",r.name));
   nm.append(el("div","ex",r.what));id.textContent=r.id;
   tr.append(nm,id,el("td","",r.technique),el("td","",r.source),el("td","num"+(r.total?"":" zero"),r.total?fmt(r.total):"never"),el("td","num"+(r.last_24h?"":" zero"),fmt(r.last_24h)),el("td","zero",r.last_seen?r.last_seen.slice(0,10):"–"));rl.append(tr)})}
+function findings(s){const f=$("#fnd");clear(f);(s.findings||[]).forEach(x=>{const d=el("div");d.append(el("b","",x.stat),el("span","",x.text));f.append(d)})}
+function matrix(s){const cv=s.coverage,m=$("#mx");clear(m);
+ (cv.tactics||[]).forEach(tn=>{const col=el("div");col.append(el("h3","",tn));
+  cv.techniques.filter(t=>(t.tactics||[]).includes(tn)).forEach(t=>{const c=el("div","tq"+(t.detected?" on":""));c.append(el("b","",t.id),document.createTextNode(t.name));c.title=t.detected?"Fired on real data ("+fmt(t.alerts)+" alerts)":"Written and tested, not seen on real traffic yet";col.append(c)});m.append(col)});
+ $("#mxv").textContent=" · "+cv.total+" techniques, ATT&CK Enterprise "+cv.attack_version+" · green = fired on real data"}
+function campaigns(s){const c=s.campaigns,svg=$("#cp");clear(svg);if(!c||!c.rows||!c.rows.length){$("#cpn").textContent="Not enough data yet.";return}
+ const L=250,W=900,n=c.days.length,cw=(W-L)/n,rh=22,NS="http://www.w3.org/2000/svg",mxv=Math.max(1,...c.rows.flatMap(r=>r.counts));svg.setAttribute("viewBox","0 0 900 "+(c.rows.length*rh+22));
+ const mk=(t,a)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);svg.append(e);return e};
+ c.rows.forEach((r,j)=>{const y=j*rh,t=mk("text",{x:0,y:y+15,fill:"#e6eaf2","font-size":11,"font-family":"ui-monospace,Menlo,monospace"});t.textContent=r.ip+"  "+(r.cc||"··")+"  "+(r.network||"").slice(0,20);
+  r.counts.forEach((v,i)=>{const e=mk("rect",{x:L+i*cw+.5,y:y+3,width:Math.max(1,cw-1),height:rh-6,rx:1,fill:v?"#a78bfa":"#131c2c","fill-opacity":v?(.3+.7*Math.log10(1+v)/Math.log10(1+mxv)):1});
+   if(v){const tt=document.createElementNS(NS,"title");tt.textContent=r.ip+" · "+c.days[i]+": "+fmt(v)+" sessions";e.append(tt)}})});
+ [0,Math.floor(n/2),n-1].forEach(i=>{const l=mk("text",{x:L+i*cw,y:c.rows.length*rh+14,fill:"#8b98ad","font-size":10});l.textContent=c.days[i].slice(5)});
+ const k=c.days.indexOf(scope);if(k>=0)mk("rect",{x:L+k*cw,y:0,width:Math.max(2,cw),height:c.rows.length*rh,fill:"none",stroke:"#22d3ee","stroke-width":1.5});
+ $("#cpn").textContent="Each row is one attacker and each column one day; brighter means more sessions that day. Hover a cell for the number."}
+function scopeInit(s){const sel=$("#scope"),days=s.stat_days||[];
+ const sig=days.length+":"+days.slice(0,3).map(x=>x.sessions).join("-");if(sel.dataset.n!==sig){clear(sel);sel.append(new Option("All time","all"));days.forEach(x=>sel.append(new Option(x.day+"  ·  "+fmt(x.sessions)+" sessions",x.day)));sel.value=scope;sel.dataset.n=sig}
+ loadScope()}
+function setScope(d){scope=d;$("#scope").value=d;loadScope();if(S){timeline(S);campaigns(S)}}
+async function loadScope(){const all=scope==="all";$$(".sb").forEach(x=>{if(x.id!=="mxv")x.textContent=" · "+(all?"all time":scope)});
+ $("#sca").style.display=all?"none":"";$("#screset").style.display=all?"none":"";$("#sca").href="/alerts?day="+encodeURIComponent(scope);
+ try{const r=await fetch("/api/stats?day="+encodeURIComponent(scope),{cache:"no-store"});if(!r.ok)throw new Error(r.status===404?"no activity recorded on that day":"HTTP "+r.status);STATS=await r.json();renderScope(STATS)}
+ catch(e){$("#scn").textContent="Statistics are not available right now ("+e.message+")."}}
+function hours(h){const svg=$("#hrs");clear(svg);const mx=Math.max(1,...h),W=320,H=100,bw=W/24,NS="http://www.w3.org/2000/svg";
+ const mk=(t,a)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);svg.append(e);return e};
+ h.forEach((v,i)=>{const hh=v/mx*H*.92,r=mk("rect",{x:i*bw+1,y:H-hh,width:bw-2,height:hh,rx:1.5,fill:"#22d3ee"}),t=document.createElementNS(NS,"title");t.textContent=String(i).padStart(2,"0")+":00 UTC · "+fmt(v)+" sessions";r.append(t)});
+ [0,6,12,18,23].forEach(i=>{const l=mk("text",{x:i*bw,y:118,fill:"#8b98ad","font-size":9});l.textContent=String(i).padStart(2,"0")+"h"})}
+function commands(c){const box=$("#cmd");clear(box);$("#cmds").textContent="";if(!c||!c.total){box.textContent="No commands in this period.";return}
+ c.top.forEach(x=>{const r=el("div","row"),t=el("div","n cmd",x.value);t.title=x.value;r.append(t,el("span","r",fmt(x.count)));box.append(r);if(x.meaning)box.append(el("div","ex",x.meaning))});
+ $("#cmds").textContent=fmt(c.total)+" commands in "+fmt(c.sessions_with_commands)+" of "+fmt(c.sessions_total)+" sessions ("+Math.round(100*c.sessions_with_commands/Math.max(1,c.sessions_total))+"%), but only "+c.distinct+" different ones."}
+function renderScope(st){const all=st.day==="all";
+ $("#scn").textContent=(all?"All time: ":"On "+st.day+": ")+fmt(st.sessions)+" honeypot sessions from "+fmt(st.attackers_count)+" IP addresses, "+fmt(st.attempts)+" login attempts.";
+ pins=(st.map||[]).map(p=>({ip:p.ip,lat:p.lat,lon:p.lon,place:p.cc||"",n:p.sessions}));if(drawnScope!==st.day){fitted=false;drawnScope=st.day}drawMap();
+ const at=$("#att");clear(at);if(!st.attackers.length){const tr=el("tr");tr.append(el("td","zero","No honeypot activity in this period."));at.append(tr)}
+ st.attackers.slice(0,10).forEach(a=>{const tr=el("tr","cl"),ip=el("td","ip",a.ip);ip.title=[a.country,a.network].filter(Boolean).join(" · ");tr.onclick=()=>openAttacker(a.ip);const b=el("td","num",fmt(a.sessions));b.style.color="var(--pu)";tr.append(ip,el("td","",a.cc||"··"),b);at.append(tr)});
+ hours(st.hours);bars("#cty",st.countries.map(c=>({value:c.country+" ("+c.cc+")",count:c.sessions})));bars("#net",st.networks.map(n=>({value:n.network,count:n.sessions})));bars("#usr",st.usernames);bars("#pwd",st.passwords);
+ if(!st.networks.length&&st.sessions)$("#net").textContent="Network owners are still being collected…";
+ $$("#cty,#net,#usr,#pwd").forEach(n=>{if(!n.firstChild)n.textContent="No activity in this period."});
+ $("#ctys").textContent=st.sessions?Math.round(100*st.located_sessions/st.sessions)+"% of these sessions come from IP addresses that could be located so far.":"";commands(st.commands)}
+$("#scope").addEventListener("change",e=>setScope(e.target.value));$("#screset").addEventListener("click",()=>setScope("all"));
 async function openAttacker(ip){const d=$("#dr"),b=$("#drb");d.classList.add("on");b.textContent="Loading…";
  try{const r=await fetch("/api/attackers/"+encodeURIComponent(ip),{cache:"no-store"});
-  if(r.status===404){b.textContent="A detailed profile is kept only for the 200 most active attackers.";return}if(!r.ok)throw new Error("HTTP "+r.status);const a=await r.json();clear(b);
+  if(r.status===404){b.textContent="No detailed profile is available for this IP.";return}if(!r.ok)throw new Error("HTTP "+r.status);const a=await r.json();clear(b);
   const where=[a.city,a.country].filter(Boolean).join(", ")+(a.network?" · "+a.network+(a.asn?" ("+a.asn+")":""):"");
   b.append(el("h3","",a.ip),el("div","ex",where||"Location not looked up yet"));
   const st=el("div","st");[["Sessions",fmt(a.sessions)],["Login attempts",fmt(a.login_attempts)],["First seen",(a.first_seen||"–").slice(0,10)],["Last seen",(a.last_seen||"–").slice(0,10)]].forEach(x=>{const c=el("div");c.append(el("b","",x[1]),el("span","",x[0]));st.append(c)});b.append(st);
@@ -111,7 +146,7 @@ function timeline(s){const svg=$("#tl");clear(svg);const d=s.timeline,mx=Math.ma
  [0,.5,1].forEach(f=>mk("line",{x1:0,x2:W,y1:H-f*H*.92,y2:H-f*H*.92,stroke:"#1c2636","stroke-width":1}));
  d.forEach((x,i)=>{const h1=x.honeypot/mx*H*.92,h2=x.other/mx*H*.92;
   const a=mk("rect",{x:i*bw+1.5,y:H-h1,width:bw-3,height:h1,rx:2,fill:"#a78bfa"});mk("rect",{x:i*bw+1.5,y:H-h1-h2,width:bw-3,height:h2,rx:2,fill:"#22d3ee"});
-  const tt=document.createElementNS(NS,"title");tt.textContent=x.day+": "+x.honeypot+" sessions, "+x.other+" alerts";a.append(tt)});
+  const tt=document.createElementNS(NS,"title");tt.textContent=x.day+": "+x.honeypot+" sessions, "+x.other+" alerts";a.append(tt);const hit=mk("rect",{x:i*bw,y:0,width:bw,height:H,fill:"transparent"});hit.style.cursor="pointer";hit.onclick=()=>setScope(x.day);if(x.day===scope)mk("rect",{x:i*bw,y:0,width:bw,height:H,fill:"none",stroke:"#22d3ee","stroke-width":1.5,rx:3})});
  const fi=d.findIndex(x=>x.day===FIXED_DAY);if(fi>=0){const X=fi*bw+bw/2;mk("line",{x1:X,x2:X,y1:6,y2:H,stroke:"#f5a524","stroke-dasharray":"4 3"});
   const l=mk("text",{x:X-6,y:12,"text-anchor":"end",fill:"#f5a524","font-size":10});l.textContent="Oct 28: log collector fixed. Earlier days had no auth/audit visibility"}
  [0,Math.floor(d.length/2),d.length-1].forEach(i=>{const l=mk("text",{x:Math.min(W-26,Math.max(0,i*bw)),y:166,fill:"#8b98ad","font-size":10});l.textContent=d[i].day.slice(5)});

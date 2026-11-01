@@ -27,9 +27,9 @@ _URL = re.compile(r"(?i)\b(h)ttp(s?)://|\bftp://")
 
 # (substring or regex on the normalised command, plain-English meaning)
 MEANINGS = [
-    (re.compile(r"\\x6f\\x6b", re.I), "Prints “ok”: bots use this to check the shell works."),
+    (re.compile(r"\\x6f\\x6b", re.I), "Prints “ok”: bots use this to check the shell is real. Some also use it to spot honeypots."),
     (re.compile(r"^(/bin/\./)?uname\b"), "Fingerprints the operating system."),
-    (re.compile(r"/proc/cpuinfo"), "Reads CPU details: is this a real machine or a trap?"),
+    (re.compile(r"/proc/cpuinfo"), "Reads CPU details."),
     (re.compile(r"\b(wget|curl)\b"), "Downloads a file: a malware-dropper attempt."),
     (re.compile(r"\bchmod\b"), "Makes a file executable."),
     (re.compile(r"\becho\b.*>\s*\S+"), "Writes a file, often a password or a marker."),
