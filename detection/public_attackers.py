@@ -121,9 +121,15 @@ def build(cowrie_db: str, geo: dict, alerts, out_path: str, now: datetime | None
         connection.close()
 
     rules_by_ip: dict[str, Counter] = defaultdict(Counter)
+    alert_info: dict[str, dict] = {}                       # every IP that raised a public alert (SSH scanners too)
     for alert in alerts:
-        if alert.source_ip in keep and public_alerts.is_public(alert):
+        if alert.source_ip and public_alerts.is_public(alert):
             rules_by_ip[alert.source_ip][alert.rule_id] += 1
+            when = public_alerts.event_moment(alert).isoformat()
+            info = alert_info.setdefault(alert.source_ip, {"n": 0, "ssh": 0, "first": when, "last": when})
+            info["n"] += 1
+            info["ssh"] += 1 if public_alerts._enum(alert.log_source) == "auth_log" else 0
+            info["first"], info["last"] = min(info["first"], when), max(info["last"], when)
 
     detail, countries, networks, points = {}, {}, {}, []
     located_sessions = 0
@@ -138,6 +144,8 @@ def build(cowrie_db: str, geo: dict, alerts, out_path: str, now: datetime | None
             "passwords": [{"value": flat(v, 40), "count": n} for v, n in pwds.get(ip, [])],
             "commands": [{"value": display_command(v), "count": n, "meaning": meaning_of(v)} for v, n in cmds.get(ip, [])],
             "rules": [{"rule_id": k, "count": n} for k, n in rules_by_ip[ip].most_common(5)],
+            "alerts": alert_info.get(ip, {}).get("n", 0),
+            "kind": "both" if alert_info.get(ip, {}).get("ssh") else "honeypot",
         }
         if "lat" in place:
             located_sessions += r["sessions"]
@@ -148,6 +156,18 @@ def build(cowrie_db: str, geo: dict, alerts, out_path: str, now: datetime | None
             n_ = networks.setdefault(key, {"network": key, "sessions": 0, "attackers": 0})
             n_["sessions"] += r["sessions"]; n_["attackers"] += 1
 
+    for ip, info in alert_info.items():                    # attackers seen only by the detections (e.g. SSH brute force)
+        if ip in detail:
+            continue
+        place = geo.get(ip) or {}
+        detail[ip] = {
+            "ip": flat(ip, 45), "sessions": 0, "login_attempts": 0, "first_seen": info["first"], "last_seen": info["last"],
+            "country": place.get("country"), "cc": place.get("cc"), "city": place.get("city"),
+            "network": place.get("org") or None, "asn": place.get("asn") or None,
+            "usernames": [], "passwords": [], "commands": [],
+            "rules": [{"rule_id": k, "count": n} for k, n in rules_by_ip[ip].most_common(5)],
+            "alerts": info["n"], "kind": "ssh",
+        }
     shown = cmd_rows[:COMMAND_LIMIT]
     commands = {"total": sum(r["n"] for r in cmd_rows), "distinct": len(cmd_rows), "sessions_with_commands": with_commands,
                 "sessions_total": total_sessions,

@@ -182,6 +182,32 @@ def pipeline_health(heartbeat_state: dict | None, now: datetime) -> list[dict]:
     return rows
 
 
+def technique_states(alerts):
+    """Techniques that fired on real (public) alerts vs only on the owner's own testing."""
+    real, testing = set(), set()
+    for a in alerts:
+        if a.rule_id in public_alerts.EXCLUDED_RULES or _sev(a) == "INFO":
+            continue
+        t = getattr(a.technique, "value", str(a.technique))
+        if public_alerts.is_public(a):
+            real.add(t)
+        elif public_alerts.is_owner_activity(a):
+            testing.add(t)
+    return real, testing - real
+
+
+def testing_rule_counts(alerts) -> dict:
+    out: dict = {}
+    for a in alerts:
+        if a.rule_id in public_alerts.EXCLUDED_RULES or _sev(a) == "INFO" or not public_alerts.is_owner_activity(a):
+            continue
+        rec = out.setdefault(a.rule_id, {"total": 0, "last_seen": None})
+        rec["total"] += 1
+        when = event_time(a).isoformat()
+        rec["last_seen"] = when if rec["last_seen"] is None else max(rec["last_seen"], when)
+    return out
+
+
 def build_summary(alerts, coverage, heartbeat_state, db_path: str, geo: dict, now: datetime | None = None) -> dict:
     now = _as_utc(now or datetime.now(timezone.utc))
     warnings: list[str] = []
@@ -190,6 +216,7 @@ def build_summary(alerts, coverage, heartbeat_state, db_path: str, geo: dict, no
     recent = [a for a in public if event_time(a) >= since]
     severity_24h = Counter(_sev(a) for a in recent)
 
+    real_t, testing_t = technique_states(alerts)
     try:
         attackers, usernames, passwords, hp_totals = honeypot_stats(db_path, now)
         honeypot_by_day = honeypot_daily_sessions(db_path, now)
@@ -239,8 +266,11 @@ def build_summary(alerts, coverage, heartbeat_state, db_path: str, geo: dict, no
                 "detected": t.detected, "alerts": t.alert_count,
                 "source": getattr(t.log_source, "value", str(t.log_source)) if t.log_source else None,
                 "tactics": rule_catalog.tactics_of(getattr(t.technique, "value", str(t.technique))),
+                "state": "real" if getattr(t.technique, "value", str(t.technique)) in real_t else ("testing" if getattr(t.technique, "value", str(t.technique)) in testing_t else "never"),
             } for t in coverage.techniques],
             "attack_version": rule_catalog.ATTACK_VERSION, "tactics": rule_catalog.TACTICS,
+            "real": sum(1 for t in coverage.techniques if getattr(t.technique, "value", str(t.technique)) in real_t),
+            "testing": sum(1 for t in coverage.techniques if getattr(t.technique, "value", str(t.technique)) in testing_t),
         },
     }
 
@@ -269,8 +299,9 @@ def publish(alerts, coverage, reports_dir, heartbeat_state=None, geo_enabled: bo
     geo = {}
     if geo_enabled:
         try:
-            wanted = list(dict.fromkeys(public_attackers.top_ips(os.path.join(reports_dir, "cowrie.db"))
-                                        + [row["ip"] for row in summary["attackers"]]))   # busiest first
+            alert_ips = [a.source_ip for a in alerts if a.source_ip and public_alerts.is_public(a)]      # few, and shown by name
+            wanted = list(dict.fromkeys(alert_ips + public_attackers.top_ips(os.path.join(reports_dir, "cowrie.db"))
+                                        + [row["ip"] for row in summary["attackers"]]))   # then busiest first
             geo = geo_lookup.enrich(wanted, os.path.join(reports_dir, "geo_cache.json"), now=now)
             attach_geo(summary, geo)
         except Exception as error:                        # a geo problem must never cost us the summary
@@ -283,7 +314,7 @@ def publish(alerts, coverage, reports_dir, heartbeat_state=None, geo_enabled: bo
     except Exception as error:                            # the alerts page degrades; the engine carries on
         summary["warnings"].append(f"public alert store failed: {clean_text(error, 120)}")
         summary["rule_counts"] = {}
-    summary["rules"] = rule_catalog.with_counts(summary["rule_counts"])
+    summary["rules"] = rule_catalog.with_counts(summary["rule_counts"], testing_rule_counts(alerts))
     try:
         summary.update(public_attackers.build(os.path.join(reports_dir, "cowrie.db"), geo, alerts,
                                               os.path.join(reports_dir, "public_attackers.json"), now))
@@ -291,12 +322,18 @@ def publish(alerts, coverage, reports_dir, heartbeat_state=None, geo_enabled: bo
         summary["warnings"].append(f"attacker details failed: {clean_text(error, 120)}")
     try:
         summary.update(public_stats.build(os.path.join(reports_dir, "cowrie.db"), geo,
-                                          os.path.join(reports_dir, "public_stats.db"), now))
+                                          os.path.join(reports_dir, "public_stats.db"), now, alerts))
     except Exception as error:                            # the date picker degrades; the rest of the page does not
         summary["warnings"].append(f"daily statistics failed: {clean_text(error, 120)}")
     detection_rules = [r for r in summary["rules"] if r["source"] != "pipeline"]
-    fired = sum(1 for r in detection_rules if r["total"] > 0)
-    summary.setdefault("findings", []).append(
-        {"stat": f"{fired} of {len(detection_rules)}", "text": "detection rules have fired on real traffic so far. The rest have not met a real trigger yet."})
+    fired = sum(1 for r in detection_rules if r["state"] == "real")
+    testing_only = sum(1 for r in detection_rules if r["state"] == "testing")
+    waiting = len(detection_rules) - fired - testing_only
+    if testing_only:
+        text = (f"detection rules have fired on real traffic. {testing_only} more fired only during my own testing, "
+                f"and {waiting} have not met a trigger yet.")
+    else:
+        text = f"detection rules have fired on real traffic so far. {waiting} have not met a real trigger yet."
+    summary.setdefault("findings", []).append({"stat": f"{fired} of {len(detection_rules)}", "text": text})
     write_summary(summary, os.path.join(reports_dir, "dashboard_summary.json"))
     return summary

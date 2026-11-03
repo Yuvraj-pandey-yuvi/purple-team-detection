@@ -121,3 +121,14 @@ def test_catalogue_joins_counts_and_keeps_never_fired_rules():
     by = {r["id"]: r for r in rows}
     assert by["rule_015_cowrie_login"]["total"] == 14261 and by["rule_002_console_login_no_mfa"]["total"] == 0
     assert len(rows) == 18
+
+
+def test_an_ip_only_the_detections_saw_gets_a_profile_with_its_rules(db, tmp_path):
+    out = str(tmp_path / "pa.json")
+    ssh = Alert(rule_id="rule_001_ssh_brute_force", technique="T1110.001", severity="MEDIUM", timestamp=NOW, first_seen=NOW,
+                log_source="auth_log", dedup_key="k", description="x", source_ip="115.190.178.190")
+    pat.build(db, GEO, [ssh, alert(A)], out, NOW)
+    d = json.load(open(out))["attackers"]
+    p = d["115.190.178.190"]
+    assert p["kind"] == "ssh" and p["sessions"] == 0 and p["alerts"] == 1 and p["rules"] == [{"rule_id": "rule_001_ssh_brute_force", "count": 1}]
+    assert d[A]["kind"] == "honeypot" and d[A]["alerts"] == 1 and d[C]["alerts"] == 0 and d[C]["rules"] == []

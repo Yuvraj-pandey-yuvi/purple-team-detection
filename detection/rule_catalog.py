@@ -25,14 +25,18 @@ CATALOG = [
 ]
 
 
-def with_counts(rule_counts: dict) -> list[dict]:
-    """Every rule, including the ones that have never fired, with total / last 24 h / last fired."""
+def with_counts(rule_counts: dict, testing_counts: dict | None = None) -> list[dict]:
+    """Every rule, including the ones that have never fired: counts on real traffic (total / last 24 h /
+    last fired), counts from the owner's own testing, and a state: real, testing or never."""
+    testing_counts = testing_counts or {}
     rows = []
     for rule_id, name, technique, source, severity, what in CATALOG:
         c = rule_counts.get(rule_id) or {}
+        t = (testing_counts.get(rule_id) or {}).get("total", 0)
         rows.append({"id": rule_id, "name": name, "technique": technique, "source": source, "severity": severity,
                      "what": what, "total": c.get("total", 0), "last_24h": c.get("last_24h", 0) or 0,
-                     "last_seen": c.get("last_seen")})
+                     "last_seen": c.get("last_seen"), "testing": t,
+                     "state": "real" if c.get("total", 0) > 0 else ("testing" if t > 0 else "never")})
     return rows
 
 

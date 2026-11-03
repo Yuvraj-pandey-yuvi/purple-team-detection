@@ -16,7 +16,7 @@ import sqlite3
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta, timezone
 
-from detection import public_attackers as pat
+from detection import public_alerts, public_attackers as pat
 
 SCHEMA_VERSION = "1"
 TOP_ATTACKERS, TOP_LIST, MAP_CAP, CAMPAIGN_ROWS = 15, 8, 600, 8
@@ -61,27 +61,40 @@ def _place(geo, ip):
     return geo.get(ip) or {}
 
 
-def assemble(day: str, sc: _Scope, geo: dict) -> dict:
+def assemble(day: str, sc: _Scope, geo: dict, by_ip: dict) -> dict:
+    """One scope (a day or all time). by_ip maps ip -> [public alerts, SSH alerts] for that scope, so
+    attackers that only the detections saw (for example SSH brute force on the real server) show up too."""
     total = sum(sc.ips.values())
-    attackers, countries, networks, points, located = [], {}, {}, [], 0
-    for rank, (ip, n) in enumerate(sc.ips.most_common()):
+    countries, networks, located = {}, {}, 0
+    for ip, n in sc.ips.items():                      # honeypot statistics count sessions only
         p = _place(geo, ip)
-        if rank < TOP_ATTACKERS:
-            attackers.append({"ip": pat.flat(ip, 45), "sessions": n, "attempts": sc.attempts.get(ip, 0), "cc": p.get("cc"),
-                              "country": p.get("country"), "network": p.get("org") or None})
         if "lat" in p:
             located += n
-            if len(points) < MAP_CAP:
-                points.append({"ip": pat.flat(ip, 45), "lat": round(p["lat"], 2), "lon": round(p["lon"], 2), "sessions": n, "cc": p.get("cc")})
             c = countries.setdefault(p.get("cc") or "??", {"cc": p.get("cc") or "??", "country": p.get("country") or "Unknown", "sessions": 0, "attackers": 0})
             c["sessions"] += n; c["attackers"] += 1
             k = p.get("org") or "Unknown network"
             w = networks.setdefault(k, {"network": k, "sessions": 0, "attackers": 0})
             w["sessions"] += n; w["attackers"] += 1
+    counts = lambda ip: by_ip.get(ip, [0, 0])
+    kind = lambda ip: "both" if sc.ips.get(ip) and counts(ip)[1] else ("ssh" if not sc.ips.get(ip) else "honeypot")
+    order = sorted(set(sc.ips) | set(by_ip), key=lambda ip: (-sc.ips.get(ip, 0), -counts(ip)[0], ip))
+    ssh_only = [ip for ip in order if ip not in sc.ips][:3]                     # always leave room for a few of them
+    shown = [ip for ip in order if ip not in ssh_only][:TOP_ATTACKERS - len(ssh_only)] + ssh_only
+    attackers, points = [], []
+    for ip in shown:
+        p = _place(geo, ip)
+        attackers.append({"ip": pat.flat(ip, 45), "sessions": sc.ips.get(ip, 0), "alerts": counts(ip)[0], "attempts": sc.attempts.get(ip, 0),
+                          "kind": kind(ip), "cc": p.get("cc"), "country": p.get("country"), "network": p.get("org") or None})
+    for ip in order:
+        p = _place(geo, ip)
+        if "lat" in p and len(points) < MAP_CAP:
+            points.append({"ip": pat.flat(ip, 45), "lat": round(p["lat"], 2), "lon": round(p["lon"], 2), "sessions": sc.ips.get(ip, 0),
+                           "alerts": counts(ip)[0], "cc": p.get("cc"), "kind": kind(ip)})
     top = lambda d: sorted(d.values(), key=lambda x: -x["sessions"])[:10]
     cmd_total = sum(sc.cmds.values())
     return {
         "day": day, "sessions": total, "attackers_count": len(sc.ips), "attempts": sum(sc.attempts.values()),
+        "ssh_scanners": sum(1 for ip in by_ip if ip not in sc.ips), "alerts": sum(v[0] for v in by_ip.values()),
         "attackers": attackers, "countries": top(countries), "networks": top(networks), "map": points,
         "located_sessions": located, "hours": sc.hours,
         "usernames": [{"value": pat.flat(v, 40), "count": n} for v, n in sc.users.most_common(TOP_LIST)],
@@ -90,6 +103,18 @@ def assemble(day: str, sc: _Scope, geo: dict) -> dict:
                      "top": [{"value": pat.display_command(v), "count": n, "meaning": pat.meaning_of(v)} for v, n in sc.cmds.most_common(TOP_LIST)],
                      "other": cmd_total - sum(n for _, n in sc.cmds.most_common(TOP_LIST))},
     }
+
+
+def alert_scopes(alerts) -> dict:
+    """day -> ip -> [public alerts, SSH (auth_log) alerts] for public alerts that carry a source IP."""
+    out: dict = defaultdict(dict)
+    for a in alerts:
+        if not a.source_ip or not public_alerts.is_public(a):
+            continue
+        rec = out[public_alerts.event_moment(a).date().isoformat()].setdefault(a.source_ip, [0, 0])
+        rec[0] += 1
+        rec[1] += 1 if public_alerts._enum(a.log_source) == "auth_log" else 0
+    return out
 
 
 def findings(allscope: _Scope) -> list[dict]:
@@ -127,18 +152,25 @@ def campaigns(days: dict[str, _Scope], geo: dict) -> dict:
     return {"days": span, "rows": rows}
 
 
-def build(cowrie_db: str, geo: dict, out_path: str, now=None) -> dict:
+def build(cowrie_db: str, geo: dict, out_path: str, now=None, alerts=()) -> dict:
     connection = pat._ro(cowrie_db)
     try:
         days = _load(connection)
     finally:
         connection.close()
+    by_day = alert_scopes(alerts)
+    for d in by_day:
+        days[d]                                                   # a day with alerts but no honeypot visit still gets a row
     allscope = _Scope()
     for sc in days.values():
         allscope.add(sc)
-    rows = {"all": assemble("all", allscope, geo)}
+    merged: dict = {}
+    for m in by_day.values():
+        for ip, (n, ssh) in m.items():
+            rec = merged.setdefault(ip, [0, 0]); rec[0] += n; rec[1] += ssh
+    rows = {"all": assemble("all", allscope, geo, merged)}
     for d, sc in days.items():
-        rows[d] = assemble(d, sc, geo)
+        rows[d] = assemble(d, sc, geo, by_day.get(d, {}))
     payload = {k: json.dumps(v, separators=(",", ":")) for k, v in rows.items()}
     fingerprint = hashlib.sha1((SCHEMA_VERSION + "|" + "|".join(k + payload[k] for k in sorted(payload))).encode()).hexdigest()
     try:
@@ -161,7 +193,8 @@ def build(cowrie_db: str, geo: dict, out_path: str, now=None) -> dict:
         finally:
             c.close()
         os.replace(temp, out_path)
-    stat_days = sorted(({"day": d, "sessions": sum(sc.ips.values())} for d, sc in days.items()), key=lambda x: x["day"], reverse=True)
+    stat_days = sorted(({"day": d, "sessions": sum(sc.ips.values()), "alerts": sum(v[0] for v in by_day.get(d, {}).values())} for d, sc in days.items()),
+                       key=lambda x: x["day"], reverse=True)
     return {"stat_days": stat_days, "findings": findings(allscope), "campaigns": campaigns(days, geo)}
 
 

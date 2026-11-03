@@ -79,7 +79,7 @@ def test_campaign_timeline_fills_the_gaps_and_ranks_by_total(db, tmp_path):
 
 def test_stat_days_are_newest_first(db, tmp_path):
     d = ps.build(db, GEO, str(tmp_path / "s.db"), NOW)["stat_days"]
-    assert d == [{"day": "2026-10-30", "sessions": 3}, {"day": "2026-10-28", "sessions": 2}]
+    assert d == [{"day": "2026-10-30", "sessions": 3, "alerts": 0}, {"day": "2026-10-28", "sessions": 2, "alerts": 0}]
 
 
 def test_only_valid_day_keys_are_accepted(db, tmp_path):
@@ -164,3 +164,88 @@ def test_the_day_key_validator_works_independently_of_the_database(db, tmp_path)
     for key in ("../secret", "2026-1-3", "ALL", "x' OR '1'='1"):
         assert ps.get(out, key) is None
     assert ps.get(out, "all")["sessions"] == 5
+
+
+# ── attackers that only the detections saw (SSH brute force on the real server) ────────────
+
+def _alert(ip, day="2026-10-30", source="auth_log", rule="rule_001_ssh_brute_force", auid=None, sev="MEDIUM"):
+    when = datetime.fromisoformat(day + "T05:00:00+00:00")
+    return Alert(rule_id=rule, technique="T1110.001", severity=sev, timestamp=when, first_seen=when, log_source=source,
+                 dedup_key=f"{rule}{ip}{day}", description="5 failed SSH attempts", source_ip=ip, auid=auid)
+
+
+SSH = "115.190.178.190"
+GEO2 = {**GEO, SSH: {"lat": 22.5, "lon": 114.1, "city": "S", "country": "China", "cc": "CN", "org": "Telecom", "asn": "AS2"}}
+
+
+def test_ssh_scanners_join_the_table_and_the_map_but_not_the_honeypot_statistics(db, tmp_path):
+    out = str(tmp_path / "s.db")
+    ps.build(db, GEO2, out, NOW, alerts=[_alert(SSH), _alert(A, source="cowrie", rule="rule_015_cowrie_login")])
+    d30 = ps.get(out, "2026-10-30")
+    rows = {a["ip"]: a for a in d30["attackers"]}
+    assert rows[SSH]["kind"] == "ssh" and rows[SSH]["sessions"] == 0 and rows[SSH]["alerts"] == 1 and rows[SSH]["network"] == "Telecom"
+    assert rows[A]["kind"] == "honeypot"                                       # a honeypot login alert does not make it an SSH scanner
+    assert any(p["ip"] == SSH and p["kind"] == "ssh" for p in d30["map"])
+    assert d30["ssh_scanners"] == 1 and d30["sessions"] == 3 and d30["attackers_count"] == 3     # honeypot figures are unchanged
+    assert sum(c["sessions"] for c in d30["countries"]) == d30["located_sessions"]               # countries still count sessions only
+
+
+def test_an_ip_seen_by_both_is_marked_both_and_a_day_with_only_alerts_gets_a_row(db, tmp_path):
+    out = str(tmp_path / "s.db")
+    r = ps.build(db, GEO2, out, NOW, alerts=[_alert(A, day="2026-10-28"), _alert(SSH, day="2026-10-29")])
+    assert {a["ip"]: a["kind"] for a in ps.get(out, "2026-10-28")["attackers"]}[A] == "both"
+    quiet = ps.get(out, "2026-10-29")
+    assert quiet["sessions"] == 0 and quiet["attackers"][0]["ip"] == SSH and quiet["ssh_scanners"] == 1
+    assert {"day": "2026-10-29", "sessions": 0, "alerts": 1} in r["stat_days"]
+
+
+def test_owner_and_heartbeat_alerts_do_not_create_attackers(db, tmp_path):
+    out = str(tmp_path / "s.db")
+    ps.build(db, GEO2, out, NOW, alerts=[_alert(SSH, auid=1000), _alert(SSH, rule="rule_018_collector_heartbeat")])
+    assert SSH not in json.dumps(ps.get(out, "all")["attackers"])
+
+
+def test_some_ssh_scanners_always_make_the_table_even_on_a_busy_day(tmp_path):
+    path = tmp_path / "cowrie.db"; init_db(path)
+    with sqlite3.connect(path) as c:
+        for i in range(40):
+            c.execute("INSERT INTO sessions(session_id, src_ip, start_time) VALUES (?,?,?)", (f"s{i}", f"9.9.9.{i}", "2026-10-30T10:00:00+00:00"))
+    out = str(tmp_path / "s.db")
+    ps.build(str(path), {}, out, NOW, alerts=[_alert("115.1.1.1"), _alert("115.1.1.2")])
+    shown = ps.get(out, "2026-10-30")["attackers"]
+    assert len(shown) == ps.TOP_ATTACKERS and {"115.1.1.1", "115.1.1.2"} <= {a["ip"] for a in shown}
+
+
+# ── three states: real traffic / my own testing / never ───────────────────────────────────
+
+def _owner(rule, tech):
+    return Alert(rule_id=rule, technique=tech, severity="HIGH", timestamp=NOW, first_seen=NOW, log_source="auditd",
+                 dedup_key=rule, description="x", auid=1000)
+
+
+def test_rules_and_techniques_have_three_states_and_the_finding_says_so(db, tmp_path):
+    reports = tmp_path / "reports"; reports.mkdir()
+    (reports / "cowrie.db").write_bytes(Path(db).read_bytes())
+    real = Alert(rule_id="rule_015_cowrie_login", technique="T1110.001", severity="CRITICAL", timestamp=NOW, first_seen=NOW,
+                 log_source="cowrie", dedup_key="a", description="x", source_ip=A)
+    alerts = [real, _owner("rule_012_account_enumeration", "T1087.001"), _owner("rule_013_system_discovery", "T1082")]
+    s = publish(alerts, CoverageSummary.from_alerts(alerts), reports, geo_enabled=False, now=NOW)
+    states = {r["id"]: r["state"] for r in s["rules"]}
+    assert states["rule_015_cowrie_login"] == "real" and states["rule_012_account_enumeration"] == "testing"
+    assert states["rule_002_console_login_no_mfa"] == "never"
+    tech = {t["id"]: t["state"] for t in s["coverage"]["techniques"]}
+    assert tech["T1110.001"] == "real" and tech["T1087.001"] == "testing" and tech["T1053.003"] == "never"
+    assert (s["coverage"]["real"], s["coverage"]["testing"]) == (1, 2) and s["coverage"]["detected"] == 3
+    f = s["findings"][3]
+    assert f["stat"] == "1 of 17" and "2 more fired only during my own testing" in f["text"] and "14 have not met a trigger" in f["text"]
+    assert next(r for r in s["rules"] if r["id"] == "rule_012_account_enumeration")["testing"] == 1
+
+
+def test_a_technique_that_fired_on_real_traffic_is_never_downgraded_to_testing(db, tmp_path):
+    reports = tmp_path / "reports"; reports.mkdir()
+    (reports / "cowrie.db").write_bytes(Path(db).read_bytes())
+    real = Alert(rule_id="rule_001_ssh_brute_force", technique="T1110.001", severity="MEDIUM", timestamp=NOW, first_seen=NOW,
+                 log_source="auth_log", dedup_key="a", description="x", source_ip=A)
+    alerts = [real, _owner("rule_015_cowrie_login", "T1110.001")]
+    s = publish(alerts, CoverageSummary.from_alerts(alerts), reports, geo_enabled=False, now=NOW)
+    assert {t["id"]: t["state"] for t in s["coverage"]["techniques"]}["T1110.001"] == "real" and s["coverage"]["testing"] == 0

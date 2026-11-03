@@ -30,7 +30,7 @@ tr.cl{cursor:pointer}tr.cl:hover td{background:#131c2c}.rt td{vertical-align:top
 .dx{float:right;background:none;border:1px solid #2a3556;color:var(--t);border-radius:8px;padding:4px 10px;cursor:pointer;font:inherit}.st{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.st div{background:#0c121d;border:1px solid var(--b);border-radius:8px;padding:8px 10px}.st b{display:block;font-size:18px}.st span{color:var(--m);font-size:11px}
 .hero p{margin:0 0 14px;max-width:920px;font-size:15px;line-height:1.6}.fg{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.fg div{background:#0c121d;border:1px solid var(--b);border-radius:10px;padding:12px 14px}.fg b{display:block;font-size:30px;color:var(--pu);letter-spacing:-.02em}.fg span{color:var(--m);font-size:13px}
 .sb{color:var(--pu);text-transform:none;letter-spacing:0;font-weight:500}.sc .ex{margin:2px 0 0}
-.mx{display:grid;grid-template-columns:repeat(7,minmax(135px,1fr));gap:10px;overflow-x:auto}.mx h3{margin:0 0 8px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--m)}.tq{border:1px solid var(--b);border-radius:8px;padding:6px 8px;margin-bottom:6px;font-size:12px;color:var(--m)}.tq.on{border-color:#1f7a5a;background:#0f2a24;color:var(--t)}.tq b{display:block;font-family:ui-monospace,Menlo,monospace;color:var(--m)}.tq.on b{color:var(--gr)}
+.mx{display:grid;grid-template-columns:repeat(7,minmax(135px,1fr));gap:10px;overflow-x:auto}.mx h3{margin:0 0 8px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--m)}.tq{border:1px solid var(--b);border-radius:8px;padding:6px 8px;margin-bottom:6px;font-size:12px;color:var(--m)}.tq.on{border-color:#1f7a5a;background:#0f2a24;color:var(--t)}.tq b{display:block;font-family:ui-monospace,Menlo,monospace;color:var(--m)}.tq.on b{color:var(--gr)}.tq.tst{border-color:#8a6a1f;background:#2a2410;color:var(--t)}.tq.tst b{color:var(--am)}.tg{font:600 10px system-ui,sans-serif;padding:1px 6px;border-radius:5px;background:#4a3f0a;color:#ffe27a;margin-left:6px;letter-spacing:.04em}.dl{color:var(--pu);text-decoration:none}
 .leg{display:flex;gap:16px;color:var(--m);font-size:12px;margin-top:6px}.leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}
 #err{display:none;margin:12px 24px;padding:10px 14px;border:1px solid var(--rd);border-radius:8px;color:#ffb3c0}
 footer{color:var(--m);font-size:12px;padding:8px 24px 28px;max-width:1400px;margin:auto}
@@ -46,8 +46,8 @@ footer{color:var(--m);font-size:12px;padding:8px 24px 28px;max-width:1400px;marg
 <div class="card k"><h2>Unique attackers · 24h</h2><div class="v" id="k2">–</div><div class="s" id="k2s"></div></div>
 <div class="card k"><h2>Alerts · 24h</h2><div class="v" id="k3">–</div><div class="s" id="k3s"></div></div>
 <div class="card k"><h2>ATT&amp;CK coverage</h2><div class="v" id="k4">–</div><div class="s" id="k4s"></div></div>
-<div class="card w12 sc"><div class="ah"><h2>Attacker statistics</h2><span class="actl"><label>Show <select id="scope"></select></label><button class="btn" id="screset" style="display:none">Back to all time</button><a class="btn" id="sca" href="/alerts" style="display:none">Alerts for this day →</a></span></div><div class="ex" id="scn"></div></div>
-<div class="card w8"><h2>Where attackers connect from<span class="sb"></span></h2><div id="map"></div><div class="ex">Locations are approximate (estimated from IP addresses). Click a dot for details.</div></div>
+<div class="card w12 sc"><div class="ah"><h2>Attacker statistics</h2><span class="actl"><label>Show <select id="scope"></select></label><button class="btn" id="screset" style="display:none">Back to all time</button><a class="btn" id="sca" href="/alerts" style="display:none">Alerts for this day →</a></span></div><div class="ex" id="scn"></div><div class="ex" id="scx">A honeypot session is a connection to a decoy server. Most scanners connect and leave without logging in, so they show up here but trigger no alert. Alerts come from detection rules, for example SSH brute force against the real server; those attackers carry an <span class="tg">SSH</span> tag and amber dots on the map.</div></div>
+<div class="card w8"><h2>Where attackers connect from<span class="sb"></span></h2><div id="map"></div><div class="ex">Locations are approximate (estimated from IP addresses). Red: honeypot visitors. Amber: SSH scanners caught by detections. Click a dot for details.</div></div>
 <div class="card w4"><h2>Most active attackers<span class="sb"></span></h2><table><tbody id="att"></tbody></table><div class="ex">Click an attacker for details.</div></div>
 <div class="card w4"><h2>When attacks happen (UTC hour)<span class="sb"></span></h2><svg id="hrs" viewBox="0 0 320 128" width="100%" role="img" aria-label="Sessions by hour of day"></svg><div class="ex">A few automated sources dominate, so this shows their schedule more than attackers in general.</div></div>
 <div class="card w4"><h2>Attacks by country<span class="sb"></span></h2><div id="cty"></div><div class="ex" id="ctys"></div></div>
@@ -59,8 +59,8 @@ footer{color:var(--m);font-size:12px;padding:8px 24px 28px;max-width:1400px;marg
 <div class="card w4"><h2>Pipeline health</h2><div id="pipe"></div></div>
 <div class="card w12"><h2>Who attacked when · the 8 most active attackers, all time</h2><svg id="cp" viewBox="0 0 900 200" width="100%" role="img" aria-label="Attacker activity by day"></svg><div class="ex" id="cpn"></div></div>
 <div class="card w12"><div class="ah"><h2>Alerts · last 24 hours</h2><span class="actl"><label>Sort by <select id="asort"><option value="priority">Priority</option><option value="time">Time (newest)</option></select></label><a class="btn" href="/alerts">Browse alerts by day →</a></span></div><div id="alist"></div></div>
-<div class="card w12"><h2>MITRE ATT&amp;CK matrix<span class="sb" id="mxv"></span></h2><div class="mx" id="mx"></div></div>
-<div class="card w12"><h2>Detection rules · how often each has fired (click a rule name to see its alerts)</h2><div style="overflow-x:auto"><table class="rt"><thead><tr><th>Rule</th><th>ID</th><th>ATT&amp;CK</th><th>Source</th><th style="text-align:right">Fired</th><th style="text-align:right">Last 24 h</th><th>Last fired</th></tr></thead><tbody id="rl"></tbody></table></div></div>
+<div class="card w12"><h2>MITRE ATT&amp;CK matrix<span class="sb" id="mxv"></span></h2><div class="mx" id="mx"></div><div class="ex">Green: fired on real traffic. Amber: fired only during my own testing. Grey: not triggered yet.</div></div>
+<div class="card w12"><h2>Detection rules · how often each has fired (click a rule name to see its alerts)</h2><div style="overflow-x:auto"><table class="rt"><thead><tr><th>Rule</th><th>ID</th><th>ATT&amp;CK</th><th>Source</th><th style="text-align:right">Real traffic</th><th style="text-align:right">My testing</th><th style="text-align:right">Last 24 h</th><th>Last fired</th></tr></thead><tbody id="rl"></tbody></table></div></div>
 </main>
 <div class="dr" id="dr"><div class="dp"><button class="dx" id="dx">Close ✕</button><div id="drb"></div></div></div>
 <footer id="foot"></footer>
@@ -77,7 +77,7 @@ function kpi(i,v,s){$("#k"+i).textContent=v;$("#k"+i+"s").textContent=s}
 function render(s){S=s;const t=s.totals,age=(Date.now()-new Date(s.generated_at))/6e4;
  $("#dot").className="dot "+(age<15?"ok":"warn");$("#status").textContent=(age<15?"LIVE":"STALE")+" · updated "+ago(s.generated_at);
  kpi(1,fmt(t.honeypot_sessions_24h),fmt(t.honeypot_sessions_total)+" all time");kpi(2,fmt(t.attackers_24h),fmt(t.attackers_total)+" all time");
- kpi(3,fmt(t.alerts_24h),t.critical_24h+" critical · "+t.high_24h+" high");kpi(4,s.coverage.pct+"%",s.coverage.detected+" of "+s.coverage.total+" techniques fired");
+ kpi(3,fmt(t.alerts_24h),t.critical_24h+" critical · "+t.high_24h+" high");kpi(4,s.coverage.pct+"%",s.coverage.real+" on real traffic · "+s.coverage.testing+" in my own testing");
  const p=$("#pipe");clear(p);s.pipeline.forEach(r=>{const row=el("div","row"),d=el("span","dot "+({ok:"ok",waiting:"warn",silent:"bad"}[r.status]||""));
   row.append(d,el("span","n",r.source.replace("_"," ")),el("span","r",{ok:"last input "+ago(r.last_input),waiting:"waiting for first input",silent:"silent "+r.silent_hours+" h",not_monitored:"not monitored",unknown:"unknown"}[r.status]));p.append(row)});
  timeline(s);
@@ -89,12 +89,12 @@ const $$=s=>[...document.querySelectorAll(s)];let scope="all",STATS=null,drawnSc
 function rulesTable(s){const rl=$("#rl");clear(rl);(s.rules||[]).forEach(r=>{const tr=el("tr"),nm=el("td"),id=el("td","ip");
   if(r.total>0){const a=el("a","",r.name);a.href="/alerts?day=all&sort=time&rule="+encodeURIComponent(r.id);nm.append(a)}else nm.append(el("div","",r.name));
   nm.append(el("div","ex",r.what));id.textContent=r.id;
-  tr.append(nm,id,el("td","",r.technique),el("td","",r.source),el("td","num"+(r.total?"":" zero"),r.total?fmt(r.total):"never"),el("td","num"+(r.last_24h?"":" zero"),fmt(r.last_24h)),el("td","zero",r.last_seen?r.last_seen.slice(0,10):"–"));rl.append(tr)})}
+  tr.append(nm,id,el("td","",r.technique),el("td","",r.source),el("td","num"+(r.total?"":" zero"),r.total?fmt(r.total):(r.testing?"–":"never")),el("td","num"+(r.testing?"":" zero"),r.testing?fmt(r.testing):"–"),el("td","num"+(r.last_24h?"":" zero"),fmt(r.last_24h)),el("td","zero",r.last_seen?r.last_seen.slice(0,10):"–"));rl.append(tr)})}
 function findings(s){const f=$("#fnd");clear(f);(s.findings||[]).forEach(x=>{const d=el("div");d.append(el("b","",x.stat),el("span","",x.text));f.append(d)})}
 function matrix(s){const cv=s.coverage,m=$("#mx");clear(m);
  (cv.tactics||[]).forEach(tn=>{const col=el("div");col.append(el("h3","",tn));
-  cv.techniques.filter(t=>(t.tactics||[]).includes(tn)).forEach(t=>{const c=el("div","tq"+(t.detected?" on":""));c.append(el("b","",t.id),document.createTextNode(t.name));c.title=t.detected?"Fired on real data ("+fmt(t.alerts)+" alerts)":"Written and tested, not seen on real traffic yet";col.append(c)});m.append(col)});
- $("#mxv").textContent=" · "+cv.total+" techniques, ATT&CK Enterprise "+cv.attack_version+" · green = fired on real data"}
+  cv.techniques.filter(t=>(t.tactics||[]).includes(tn)).forEach(t=>{const c=el("div","tq"+({real:" on",testing:" tst"}[t.state]||""));c.append(el("b","",t.id),document.createTextNode(t.name));c.title={real:"Fired on real traffic",testing:"Fired only during my own testing"}[t.state]||"Not triggered yet";col.append(c)});m.append(col)});
+ $("#mxv").textContent=" · "+cv.total+" techniques, ATT&CK Enterprise "+cv.attack_version}
 function campaigns(s){const c=s.campaigns,svg=$("#cp");clear(svg);if(!c||!c.rows||!c.rows.length){$("#cpn").textContent="Not enough data yet.";return}
  const L=250,W=900,n=c.days.length,cw=(W-L)/n,rh=22,NS="http://www.w3.org/2000/svg",mxv=Math.max(1,...c.rows.flatMap(r=>r.counts));svg.setAttribute("viewBox","0 0 900 "+(c.rows.length*rh+22));
  const mk=(t,a)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);svg.append(e);return e};
@@ -105,7 +105,7 @@ function campaigns(s){const c=s.campaigns,svg=$("#cp");clear(svg);if(!c||!c.rows
  const k=c.days.indexOf(scope);if(k>=0)mk("rect",{x:L+k*cw,y:0,width:Math.max(2,cw),height:c.rows.length*rh,fill:"none",stroke:"#22d3ee","stroke-width":1.5});
  $("#cpn").textContent="Each row is one attacker and each column one day; brighter means more sessions that day. Hover a cell for the number."}
 function scopeInit(s){const sel=$("#scope"),days=s.stat_days||[];
- const sig=days.length+":"+days.slice(0,3).map(x=>x.sessions).join("-");if(sel.dataset.n!==sig){clear(sel);sel.append(new Option("All time","all"));days.forEach(x=>sel.append(new Option(x.day+"  ·  "+fmt(x.sessions)+" sessions",x.day)));sel.value=scope;sel.dataset.n=sig}
+ const sig=days.length+":"+days.slice(0,3).map(x=>x.sessions+"/"+x.alerts).join("-");if(sel.dataset.n!==sig){clear(sel);sel.append(new Option("All time","all"));days.forEach(x=>sel.append(new Option(x.day+"  ·  "+fmt(x.sessions)+" sessions"+(x.alerts?"  ·  "+fmt(x.alerts)+" alerts":""),x.day)));sel.value=scope;sel.dataset.n=sig}
  loadScope()}
 function setScope(d){scope=d;$("#scope").value=d;loadScope();if(S){timeline(S);campaigns(S)}}
 async function loadScope(){const all=scope==="all";$$(".sb").forEach(x=>{if(x.id!=="mxv")x.textContent=" · "+(all?"all time":scope)});
@@ -120,10 +120,10 @@ function commands(c){const box=$("#cmd");clear(box);$("#cmds").textContent="";if
  c.top.forEach(x=>{const r=el("div","row"),t=el("div","n cmd",x.value);t.title=x.value;r.append(t,el("span","r",fmt(x.count)));box.append(r);if(x.meaning)box.append(el("div","ex",x.meaning))});
  $("#cmds").textContent=fmt(c.total)+" commands in "+fmt(c.sessions_with_commands)+" of "+fmt(c.sessions_total)+" sessions ("+Math.round(100*c.sessions_with_commands/Math.max(1,c.sessions_total))+"%), but only "+c.distinct+" different ones."}
 function renderScope(st){const all=st.day==="all";
- $("#scn").textContent=(all?"All time: ":"On "+st.day+": ")+fmt(st.sessions)+" honeypot sessions from "+fmt(st.attackers_count)+" IP addresses, "+fmt(st.attempts)+" login attempts.";
- pins=(st.map||[]).map(p=>({ip:p.ip,lat:p.lat,lon:p.lon,place:p.cc||"",n:p.sessions}));if(drawnScope!==st.day){fitted=false;drawnScope=st.day}drawMap();
+ $("#scn").textContent=(all?"All time: ":"On "+st.day+": ")+fmt(st.sessions)+" honeypot sessions from "+fmt(st.attackers_count)+" IP addresses, "+fmt(st.attempts)+" login attempts."+(st.ssh_scanners?" Detections also caught "+fmt(st.ssh_scanners)+" SSH scanner"+(st.ssh_scanners>1?"s":"")+" on the real server.":"");
+ pins=(st.map||[]).map(p=>({ip:p.ip,lat:p.lat,lon:p.lon,place:p.cc||"",n:p.sessions+(p.kind==="ssh"?p.alerts:0),kind:p.kind}));if(drawnScope!==st.day){fitted=false;drawnScope=st.day}drawMap();
  const at=$("#att");clear(at);if(!st.attackers.length){const tr=el("tr");tr.append(el("td","zero","No honeypot activity in this period."));at.append(tr)}
- st.attackers.slice(0,10).forEach(a=>{const tr=el("tr","cl"),ip=el("td","ip",a.ip);ip.title=[a.country,a.network].filter(Boolean).join(" · ");tr.onclick=()=>openAttacker(a.ip);const b=el("td","num",fmt(a.sessions));b.style.color="var(--pu)";tr.append(ip,el("td","",a.cc||"··"),b);at.append(tr)});
+ st.attackers.slice(0,10).forEach(a=>{const tr=el("tr","cl"),ip=el("td","ip",a.ip);ip.title=[a.country,a.network].filter(Boolean).join(" · ");tr.onclick=()=>openAttacker(a.ip);if(a.kind!=="honeypot")ip.append(el("span","tg","SSH"));const b=el("td","num",a.sessions?fmt(a.sessions):fmt(a.alerts)+" alert"+(a.alerts>1?"s":""));b.style.color="var(--pu)";tr.append(ip,el("td","",a.cc||"··"),b);at.append(tr)});
  hours(st.hours);bars("#cty",st.countries.map(c=>({value:c.country+" ("+c.cc+")",count:c.sessions})));bars("#net",st.networks.map(n=>({value:n.network,count:n.sessions})));bars("#usr",st.usernames);bars("#pwd",st.passwords);
  if(!st.networks.length&&st.sessions)$("#net").textContent="Network owners are still being collected…";
  $$("#cty,#net,#usr,#pwd").forEach(n=>{if(!n.firstChild)n.textContent="No activity in this period."});
@@ -134,9 +134,11 @@ async function openAttacker(ip){const d=$("#dr"),b=$("#drb");d.classList.add("on
   if(r.status===404){b.textContent="No detailed profile is available for this IP.";return}if(!r.ok)throw new Error("HTTP "+r.status);const a=await r.json();clear(b);
   const where=[a.city,a.country].filter(Boolean).join(", ")+(a.network?" · "+a.network+(a.asn?" ("+a.asn+")":""):"");
   b.append(el("h3","",a.ip),el("div","ex",where||"Location not looked up yet"));
-  const st=el("div","st");[["Sessions",fmt(a.sessions)],["Login attempts",fmt(a.login_attempts)],["First seen",(a.first_seen||"–").slice(0,10)],["Last seen",(a.last_seen||"–").slice(0,10)]].forEach(x=>{const c=el("div");c.append(el("b","",x[1]),el("span","",x[0]));st.append(c)});b.append(st);
+  const st=el("div","st");[["Sessions",fmt(a.sessions)],["Login attempts",fmt(a.login_attempts)],["Alerts raised",fmt(a.alerts||0)],["Seen by",{ssh:"SSH detection",both:"Honeypot and SSH detection"}[a.kind]||"Honeypot"],["First seen",(a.first_seen||"–").slice(0,10)],["Last seen",(a.last_seen||"–").slice(0,10)]].forEach(x=>{const c=el("div");c.append(el("b","",x[1]),el("span","",x[0]));st.append(c)});b.append(st);
   const list=(title,items)=>{if(!items||!items.length)return;b.append(el("h4","",title));items.forEach(i=>{const r=el("div","row"),t=el("div","n cmd",i.value||i.rule_id);r.append(t,el("span","r",fmt(i.count)));b.append(r);if(i.meaning)b.append(el("div","ex",i.meaning))})};
-  list("Usernames tried",a.usernames);list("Passwords tried",a.passwords);list("Commands run after login",a.commands);list("Detections that fired for this IP",a.rules)
+  list("Usernames tried",a.usernames);list("Passwords tried",a.passwords);list("Commands run after login",a.commands);list("Detections that fired for this IP",a.rules);
+  if(!(a.rules||[]).length){b.append(el("h4","","Detections that fired for this IP"),el("div","ex",a.sessions&&!a.login_attempts?"None. It connected to the honeypot and left without logging in, so no rule fired.":"No detection has fired for this IP."))}
+  else{const l=el("a","dl","View these alerts →");l.href="/alerts?day=all&sort=time&ip="+encodeURIComponent(a.ip);const w=el("div","ex");w.append(l);b.append(w)}
  }catch(e){b.textContent="Could not load details ("+e.message+")."}}
 $("#dx").onclick=()=>$("#dr").classList.remove("on");$("#dr").addEventListener("click",e=>{if(e.target.id==="dr")$("#dr").classList.remove("on")});
 addEventListener("keydown",e=>{if(e.key==="Escape")$("#dr").classList.remove("on")});
@@ -159,8 +161,8 @@ async function initMap(){if(!window.L){$("#map").textContent="Map library could 
  try{key=(await(await fetch("/config")).json()).map_key||""}catch(e){}
  L.tileLayer("https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png"+(key?"?key="+encodeURIComponent(key):""),{maxZoom:18,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}).addTo(map);drawMap()}
 function drawMap(){if(!map)return;layer.clearLayers();const mx=Math.max(1,...pins.map(p=>p.n));
- pins.forEach(p=>{const m=L.circleMarker([p.lat,p.lon],{radius:5+11*Math.sqrt(p.n/mx),color:"#fb4d6a",weight:1.5,fillColor:"#fb4d6a",fillOpacity:.5}).addTo(layer);
-  const tip=el("div","",p.ip+" · "+(p.place||"unknown")+" · "+fmt(p.n)+" events");m.bindTooltip(tip);m.on("click",()=>openAttacker(p.ip))});
+ pins.forEach(p=>{const m=L.circleMarker([p.lat,p.lon],{radius:5+11*Math.sqrt(p.n/mx),color:p.kind==="ssh"?"#f5a524":"#fb4d6a",weight:1.5,fillColor:p.kind==="ssh"?"#f5a524":"#fb4d6a",fillOpacity:.5}).addTo(layer);
+  const tip=el("div","",p.ip+" · "+(p.place||"unknown")+(p.kind==="ssh"?" · SSH scanner":" · "+fmt(p.n)+" events"));m.bindTooltip(tip);m.on("click",()=>openAttacker(p.ip))});
  if(pins.length&&!fitted){map.fitBounds(pins.map(p=>[p.lat,p.lon]),{maxZoom:4,padding:[30,30]});fitted=true}}
 async function load(){try{const r=await fetch("/summary",{cache:"no-store"});if(!r.ok)throw new Error("HTTP "+r.status);render(await r.json());$("#err").style.display="none"}
  catch(e){const b=$("#err");b.textContent="Cannot load live data ("+e.message+"). Retrying…";b.style.display="block";$("#dot").className="dot bad";$("#status").textContent="OFFLINE"}}

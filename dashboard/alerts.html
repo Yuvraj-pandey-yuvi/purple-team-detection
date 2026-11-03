@@ -17,7 +17,7 @@ tr.rl{cursor:pointer}tr.rl:hover td{background:#131c2c}.mono{font-family:ui-mono
 <main>
 <div class="card"><h2>Filters</h2><div class="ctl">
 <label>Day<select id="day"></select></label><label>Sort by<select id="sort"><option value="priority">Priority (highest first)</option><option value="time">Time (newest first)</option></select></label>
-<label>Rule<select id="rule"></select></label></div></div>
+<label>Rule<select id="rule"></select></label><label id="ipf" style="display:none">IP filter<span class="btn" id="ipx" role="button" tabindex="0"></span></label></div></div>
 <div class="card"><h2>How many times each rule has fired · click a rule to filter</h2><div style="overflow-x:auto"><table><thead><tr><th>Rule</th><th class="n" style="text-align:right">All time</th><th style="text-align:right">Last 24 h</th><th>Last fired (UTC)</th></tr></thead><tbody id="rules"></tbody></table></div></div>
 <div class="card"><h2 id="lt">Alerts</h2><div id="list"></div></div>
 </main>
@@ -25,11 +25,11 @@ tr.rl{cursor:pointer}tr.rl:hover td{background:#131c2c}.mono{font-family:ui-mono
 <script>
 "use strict";
 const UI=window.AlertsUI,$=s=>document.querySelector(s),P=new URLSearchParams(location.search);
-const st={day:P.get("day")||"24h",sort:P.get("sort")==="time"?"time":"priority",rule:P.get("rule")||"",page:Math.max(1,+P.get("page")||1)};
+const st={day:P.get("day")||"24h",sort:P.get("sort")==="time"?"time":"priority",rule:P.get("rule")||"",ip:P.get("ip")||"",page:Math.max(1,+P.get("page")||1)};
 const opt=(v,t)=>{const o=document.createElement("option");o.value=v;o.textContent=t;return o};
-function sync(){const q=new URLSearchParams({day:st.day,sort:st.sort,page:st.page});if(st.rule)q.set("rule",st.rule);history.replaceState(null,"","?"+q)}
-async function refresh(){sync();const q={sort:st.sort,page:st.page,per_page:50};if(st.day==="24h")q.hours=24;else if(st.day!=="all")q.day=st.day;if(st.rule)q.rule=st.rule;
- $("#lt").textContent=(st.day==="24h"?"Alerts · last 24 hours":st.day==="all"?"Alerts · all time":"Alerts · "+st.day)+(st.rule?" · "+st.rule:"");
+function sync(){const q=new URLSearchParams({day:st.day,sort:st.sort,page:st.page});if(st.rule)q.set("rule",st.rule);if(st.ip)q.set("ip",st.ip);history.replaceState(null,"","?"+q)}
+async function refresh(){sync();const q={sort:st.sort,page:st.page,per_page:50};if(st.day==="24h")q.hours=24;else if(st.day!=="all")q.day=st.day;if(st.rule)q.rule=st.rule;if(st.ip)q.ip=st.ip;
+ $("#lt").textContent=(st.day==="24h"?"Alerts · last 24 hours":st.day==="all"?"Alerts · all time":"Alerts · "+st.day)+(st.rule?" · "+st.rule:"")+(st.ip?" · IP "+st.ip:"");
  await UI.load($("#list"),q,{onPage:p=>{st.page=p;refresh();window.scrollTo({top:0,behavior:"smooth"})}})}
 async function init(){let days,rules;
  try{[days,rules]=await Promise.all([UI.getJSON("/api/days"),UI.getJSON("/api/rules")])}catch(e){$("#list").textContent="Alerts are not available right now ("+e.message+").";return}
@@ -41,6 +41,7 @@ async function init(){let days,rules;
   [[r,"mono"],[UI.fmt(rules[r].total),"n"],[UI.fmt(rules[r].last_24h),"n"+(rules[r].last_24h?"":" zero")],[UI.when(rules[r].last_seen),"zero"]].forEach(c=>{const td=document.createElement("td");td.className=c[1];td.textContent=c[0];tr.append(td)});
   tr.onclick=()=>{st.rule=r;rs.value=r;st.page=1;refresh();window.scrollTo({top:document.body.scrollHeight,behavior:"smooth"})};tb.append(tr)});
  ds.onchange=()=>{st.day=ds.value;st.page=1;refresh()};$("#sort").onchange=e=>{st.sort=e.target.value;st.page=1;refresh()};rs.onchange=()=>{st.rule=rs.value;st.page=1;refresh()};
+ const showIp=()=>{$("#ipf").style.display=st.ip?"":"none";$("#ipx").textContent=st.ip+" ✕"};showIp();$("#ipx").onclick=()=>{st.ip="";st.page=1;showIp();refresh()};
  refresh()}
 init();
 </script></body></html>

@@ -128,3 +128,9 @@ def test_stats_endpoint(client, tmp_path, monkeypatch):
     assert cl.get("/api/stats", params={"day": "x' OR '1'='1"}).status_code == 404
     path.unlink()
     assert cl.get("/api/stats").status_code == 503
+
+
+def test_alert_list_can_be_filtered_by_ip(client):
+    c, _, _ = client
+    assert c.get("/api/alerts?ip=9.9.9.9").json()["total"] == 3 and c.get("/api/alerts?ip=8.8.8.8").json()["total"] == 0
+    assert c.get("/api/alerts", params={"ip": "x" * 80}).status_code == 422

@@ -102,9 +102,9 @@ def rules():
 @app.get("/api/alerts")
 def alerts(day: str | None = None, hours: int | None = Query(None, ge=1, le=720), sort: str = "priority",
            rule: str | None = Query(None, max_length=80), page: int = Query(1, ge=1, le=100000),
-           per_page: int = Query(50, ge=1, le=public_alerts.MAX_PER_PAGE)):
+           per_page: int = Query(50, ge=1, le=public_alerts.MAX_PER_PAGE), ip: str | None = Query(None, max_length=45)):
     since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat() if hours else None
-    return _json(_db(public_alerts.query_alerts, day=day, since=since, sort=sort, rule=rule, page=page, per_page=per_page))
+    return _json(_db(public_alerts.query_alerts, day=day, since=since, sort=sort, rule=rule, page=page, per_page=per_page, ip=ip))
 
 
 @app.get("/api/alerts/{alert_id}")

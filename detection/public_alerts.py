@@ -178,7 +178,7 @@ def rule_counts(db_path: str, since_iso: str) -> dict[str, dict]:
         connection.close()
 
 
-def query_alerts(db_path: str, day=None, since=None, sort="priority", rule=None, page=1, per_page=50) -> dict:
+def query_alerts(db_path: str, day=None, since=None, sort="priority", rule=None, page=1, per_page=50, ip=None) -> dict:
     """One page of alerts. Every user-supplied value is validated or bound as a parameter."""
     order = "severity_rank DESC, ts DESC, id" if sort != "time" else "ts DESC, id"
     where, params = [], []
@@ -188,6 +188,8 @@ def query_alerts(db_path: str, day=None, since=None, sort="priority", rule=None,
         where.append("ts >= ?"); params.append(str(since)[:40])
     if rule:
         where.append("rule_id = ?"); params.append(str(rule)[:80])
+    if ip:
+        where.append("source_ip = ?"); params.append(str(ip)[:45])
     clause = ("WHERE " + " AND ".join(where)) if where else ""
     per_page = max(1, min(int(per_page), MAX_PER_PAGE))
     connection = _open(db_path)

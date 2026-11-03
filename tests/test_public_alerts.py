@@ -127,3 +127,9 @@ def test_reader_works_on_a_read_only_copy(db, tmp_path):
         assert pa.query_alerts(str(copy))["total"] == 4
     finally:
         os.chmod(copy.parent, stat.S_IRWXU)
+
+
+def test_alerts_can_be_listed_for_one_source_ip(db):
+    path, _ = db
+    assert pa.query_alerts(path, ip="9.9.9.9")["total"] == 4 and pa.query_alerts(path, ip="1.2.3.4")["total"] == 0
+    assert pa.query_alerts(path, ip="9.9.9.9' OR '1'='1")["total"] == 0
