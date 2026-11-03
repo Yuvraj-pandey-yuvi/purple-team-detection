@@ -20,6 +20,7 @@ from detection import public_alerts, public_attackers as pat
 
 SCHEMA_VERSION = "1"
 TOP_ATTACKERS, TOP_LIST, MAP_CAP, CAMPAIGN_ROWS = 15, 8, 600, 8
+MAP_SSH_RESERVE = 150            # map slots kept for SSH scanners: they have no honeypot sessions, so they sort last
 _DAY = re.compile(r"^(all|\d{4}-\d{2}-\d{2})$")
 
 
@@ -85,17 +86,19 @@ def assemble(day: str, sc: _Scope, geo: dict, by_ip: dict) -> dict:
         p = _place(geo, ip)
         attackers.append({"ip": pat.flat(ip, 45), "sessions": sc.ips.get(ip, 0), "alerts": counts(ip)[0], "attempts": sc.attempts.get(ip, 0),
                           "kind": kind(ip), "cc": p.get("cc"), "country": p.get("country"), "network": p.get("org") or None})
-    for ip in order:
+    mappable = [ip for ip in order if "lat" in _place(geo, ip)]
+    ssh_pins = [ip for ip in mappable if ip not in sc.ips][:MAP_SSH_RESERVE]       # reserved: the cap must never hide them
+    on_map = ssh_pins + [ip for ip in mappable if ip in sc.ips][:MAP_CAP - len(ssh_pins)]
+    for ip in on_map:
         p = _place(geo, ip)
-        if "lat" in p and len(points) < MAP_CAP:
-            points.append({"ip": pat.flat(ip, 45), "lat": round(p["lat"], 2), "lon": round(p["lon"], 2), "sessions": sc.ips.get(ip, 0),
-                           "alerts": counts(ip)[0], "cc": p.get("cc"), "kind": kind(ip)})
+        points.append({"ip": pat.flat(ip, 45), "lat": round(p["lat"], 2), "lon": round(p["lon"], 2), "sessions": sc.ips.get(ip, 0),
+                       "alerts": counts(ip)[0], "cc": p.get("cc"), "kind": kind(ip)})
     top = lambda d: sorted(d.values(), key=lambda x: -x["sessions"])[:10]
     cmd_total = sum(sc.cmds.values())
     return {
         "day": day, "sessions": total, "attackers_count": len(sc.ips), "attempts": sum(sc.attempts.values()),
         "ssh_scanners": sum(1 for ip in by_ip if ip not in sc.ips), "alerts": sum(v[0] for v in by_ip.values()),
-        "attackers": attackers, "countries": top(countries), "networks": top(networks), "map": points,
+        "attackers": attackers, "countries": top(countries), "networks": top(networks), "map": points, "map_total": len(mappable),
         "located_sessions": located, "hours": sc.hours,
         "usernames": [{"value": pat.flat(v, 40), "count": n} for v, n in sc.users.most_common(TOP_LIST)],
         "passwords": [{"value": pat.flat(v, 40), "count": n} for v, n in sc.pwds.most_common(TOP_LIST)],

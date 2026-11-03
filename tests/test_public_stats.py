@@ -249,3 +249,19 @@ def test_a_technique_that_fired_on_real_traffic_is_never_downgraded_to_testing(d
     alerts = [real, _owner("rule_015_cowrie_login", "T1110.001")]
     s = publish(alerts, CoverageSummary.from_alerts(alerts), reports, geo_enabled=False, now=NOW)
     assert {t["id"]: t["state"] for t in s["coverage"]["techniques"]}["T1110.001"] == "real" and s["coverage"]["testing"] == 0
+
+
+def test_ssh_scanners_survive_the_map_cap_on_a_busy_scope(tmp_path):
+    """More located honeypot visitors than the map can hold must not push the SSH scanners off the map."""
+    path = tmp_path / "cowrie.db"; init_db(path)
+    n = ps.MAP_CAP + 50
+    geo = {f"9.{i // 250}.{i % 250}.1": {"lat": 10.0, "lon": 20.0, "cc": "US", "country": "United States", "org": "X"} for i in range(n)}
+    with sqlite3.connect(path) as c:
+        for i, ip in enumerate(geo):
+            c.execute("INSERT INTO sessions(session_id, src_ip, start_time) VALUES (?,?,?)", (f"s{i}", ip, "2026-10-30T10:00:00+00:00"))
+    geo[SSH] = GEO2[SSH]
+    out = str(tmp_path / "s.db")
+    ps.build(str(path), geo, out, NOW, alerts=[_alert(SSH)])
+    row = ps.get(out, "all")
+    assert len(row["map"]) == ps.MAP_CAP and row["map_total"] == n + 1                      # truncated, and it says by how much
+    assert [p["kind"] for p in row["map"] if p["ip"] == SSH] == ["ssh"]                    # but the scanner is on the map
