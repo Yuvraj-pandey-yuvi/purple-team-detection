@@ -14,7 +14,7 @@ from detection import public_stats as ps, rule_catalog
 from detection.dashboard_summary import publish
 
 NOW = datetime(2026, 10, 30, 12, 0, tzinfo=timezone.utc)
-A, B, C = "120.24.191.90", "178.128.36.18", "7.7.7.7"
+A, B, C = "1.1.1.1", "178.128.36.18", "7.7.7.7"
 GEO = {A: {"lat": 30.274, "lon": 120.155, "city": "H", "country": "China", "cc": "CN", "org": "Cloud Co", "asn": "AS1"},
        B: {"lat": 51.5, "lon": -0.1, "city": "L", "country": "United Kingdom", "cc": "GB", "org": "Other Co", "asn": "AS2"}}
 OK = 'echo -e "\\x6F\\x6B"'

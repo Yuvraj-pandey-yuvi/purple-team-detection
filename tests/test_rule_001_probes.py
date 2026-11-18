@@ -64,7 +64,7 @@ def test_real_log_lines_count_connections_not_lines():
     for index in range(5):
         pid = 1000 + index
         second = index * 2
-        stamp = f"2026-01-15T10:00:{second:02d}.000000+00:00 ip-172-31-38-66"
+        stamp = f"2026-01-15T10:00:{second:02d}.000000+00:00 ip-10-0-1-23"
         lines.append(f"{stamp} sshd-session[{pid}]: Invalid user  from 9.9.9.9 port {40000 + index}")
         lines.append(f"{stamp} sshd-session[{pid}]: Connection closed by invalid user  9.9.9.9 port {40000 + index} [preauth]")
     alerts = detect_ssh_burst([AuthLogEvent.from_raw(line) for line in lines])

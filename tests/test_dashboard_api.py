@@ -23,7 +23,7 @@ def client(tmp_path, monkeypatch):
     summary.write_text(json.dumps({"generated_at": "2026-10-29T12:00:00+00:00", "totals": {}}))
     db = tmp_path / "public_alerts.db"
     alerts = [make(sev="MEDIUM", mins=5), make(sev="CRITICAL", mins=50, rule="rule_004_shadow_access", src="auditd",
-                                               raw="arn:aws:iam::349491201539:user/x", extra={"acct": "349491201539"}),
+                                               raw="arn:aws:iam::123456789012:user/x", extra={"acct": "123456789012"}),
               make(mins=60 * 24 * 3, desc="<img src=x onerror=alert(1)>"), make(auid=1000, mins=2)]
     pa.rebuild(alerts, str(db), hidden_ips=set())
     import dashboard.api as api
@@ -61,7 +61,7 @@ def test_detail_is_complete_and_masked(client):
     item = c.get("/api/alerts?rule=rule_004_shadow_access").json()["items"][0]
     d = c.get(f"/api/alerts/{item['id']}").json()
     assert d["rule_id"] == "rule_004_shadow_access" and d["technique"] and d["extra"]
-    assert "349491201539" not in json.dumps(d) and d["raw_log"] is None and "withheld" in d["raw_log_note"]
+    assert "123456789012" not in json.dumps(d) and d["raw_log"] is None and "withheld" in d["raw_log_note"]
     assert c.get("/api/alerts/doesnotexist").status_code == 404
 
 

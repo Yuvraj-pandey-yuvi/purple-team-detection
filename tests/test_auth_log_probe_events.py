@@ -2,7 +2,7 @@
 # SSH probes on a key-only server: one "probe" event per connection, from REAL log lines.
 from schemas import AuthLogEvent
 
-PREFIX = "2026-10-18T00:48:08.985656+00:00 ip-172-31-38-66 "
+PREFIX = "2026-10-18T00:48:08.985656+00:00 ip-10-0-1-23 "
 
 
 def parse(message):

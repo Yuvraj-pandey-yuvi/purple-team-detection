@@ -12,7 +12,7 @@ from storage.cowrie_store import init_db
 from detection import public_attackers as pat, public_alerts, rule_catalog
 
 NOW = datetime(2026, 10, 30, 12, 0, tzinfo=timezone.utc)
-A, B, C = "120.24.191.90", "178.128.36.18", "7.7.7.7"
+A, B, C = "1.1.1.1", "178.128.36.18", "7.7.7.7"
 GEO = {A: {"lat": 30.3, "lon": 120.2, "city": "Hangzhou", "country": "China", "cc": "CN", "org": "Cloud Co", "asn": "AS1"},
        B: {"lat": 51.5, "lon": -0.1, "city": "London", "country": "United Kingdom", "cc": "GB", "org": "Cloud Co", "asn": "AS1"}}
 ELF = ">A@/1'8ELF7}" + "\x01\x02\x03" * 50

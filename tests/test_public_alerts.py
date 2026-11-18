@@ -32,23 +32,23 @@ def test_heartbeat_info_and_owner_alerts_are_not_public():
 
 
 def test_masking_hides_account_ids_hostnames_private_and_configured_ips_but_keeps_attackers():
-    text = "acct 349491201539 on ip-172-31-38-66 from 172.31.38.66 and 13.60.53.19 attacker 120.24.191.90"
-    out = pa.mask_text(text, hidden_ips={"13.60.53.19"})
-    assert "349491201539" not in out and "ip-172-31-38-66" not in out and "172.31.38.66" not in out
-    assert "13.60.53.19" not in out and "120.24.191.90" in out
+    text = "acct 123456789012 on ip-10-0-1-23 from 10.0.1.23 and 8.8.4.4 attacker 1.1.1.1"
+    out = pa.mask_text(text, hidden_ips={"8.8.4.4"})
+    assert "123456789012" not in out and "ip-10-0-1-23" not in out and "10.0.1.23" not in out
+    assert "8.8.4.4" not in out and "1.1.1.1" in out
 
 
 def test_raw_log_only_for_attacker_facing_sources_and_masked():
-    ssh = pa.public_view(make(src="auth_log", raw="Failed from 9.9.9.9 acct 349491201539 via 10.0.0.5"), hidden_ips=set())
-    assert "349491201539" not in ssh["raw_log"] and "10.0.0.5" not in ssh["raw_log"] and "9.9.9.9" in ssh["raw_log"]
-    cloud = pa.public_view(make(src="cloudtrail", raw="arn:aws:iam::349491201539:user/x"), hidden_ips=set())
+    ssh = pa.public_view(make(src="auth_log", raw="Failed from 9.9.9.9 acct 123456789012 via 10.0.0.5"), hidden_ips=set())
+    assert "123456789012" not in ssh["raw_log"] and "10.0.0.5" not in ssh["raw_log"] and "9.9.9.9" in ssh["raw_log"]
+    cloud = pa.public_view(make(src="cloudtrail", raw="arn:aws:iam::123456789012:user/x"), hidden_ips=set())
     assert cloud["raw_log"] is None and "withheld" in cloud["raw_log_note"]
 
 
 def test_extra_is_masked_and_bounded():
-    view = pa.public_view(make(extra={f"k{i}": "x" * 900 for i in range(60)} | {"acct": "349491201539"}), hidden_ips=set())
+    view = pa.public_view(make(extra={f"k{i}": "x" * 900 for i in range(60)} | {"acct": "123456789012"}), hidden_ips=set())
     assert len(view["extra"]) == pa.MAX_EXTRA_KEYS and all(len(v) <= pa.MAX_VALUE_CHARS for v in view["extra"].values())
-    assert "349491201539" not in str(pa.public_view(make(extra={"acct": "349491201539"}), hidden_ips=set())["extra"])
+    assert "123456789012" not in str(pa.public_view(make(extra={"acct": "123456789012"}), hidden_ips=set())["extra"])
 
 
 def test_ids_are_stable_and_distinct():
