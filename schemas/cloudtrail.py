@@ -13,11 +13,11 @@ Real CloudTrail record structure:
   "eventVersion": "1.11",
   "userIdentity": {
     "type": "IAMUser",
-    "principalId": "AIDAVCX2MQYBU5QCZQYAT",
-    "arn": "arn:aws:iam::349491201539:user/buddy",
-    "accountId": "349491201539",
+    "principalId": "AIDAEXAMPLEUSERID1234",
+    "arn": "arn:aws:iam::123456789012:user/example-user",
+    "accountId": "123456789012",
     "accessKeyId": "",
-    "userName": "buddy",
+    "userName": "example-user",
     "sessionContext": {
       "attributes": {
         "creationDate": "2026-05-21T12:17:33Z",
@@ -149,7 +149,7 @@ class CloudTrailEvent(BaseLogEvent):
 
         USERNAME EXTRACTION CASCADE:
         Different identity types store username differently:
-          IAMUser:     userIdentity.userName = "buddy"
+          IAMUser:     userIdentity.userName = "example-user"
           AssumedRole: userIdentity.sessionIssuer.userName = "admin-role"
           Root:        no userName field — use "root"
           AWSService:  no userName — use principalId
@@ -227,7 +227,7 @@ class CloudTrailEvent(BaseLogEvent):
         """
         T1078 signal for API calls (not just console login).
 
-        YOUR REAL LOGS show buddy making API calls with mfaAuthenticated=false.
+        YOUR REAL LOGS show example-user making API calls with mfaAuthenticated=false.
         This is a broader signal than just ConsoleLogin — any API call
         from an IAMUser without MFA is a risk.
         """

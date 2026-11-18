@@ -107,7 +107,7 @@ The pipeline uses seek pointers to avoid reprocessing old log lines:
 {
   "auth_log_position": 48392,
   "auditd_position": 129841,
-  "cloudtrail_last_file": "349491201539_CloudTrail_eu-north-1_20260604T1310Z.json.gz",
+  "cloudtrail_last_file": "123456789012_CloudTrail_eu-north-1_20260604T1310Z.json.gz",
   "last_run": "2026-06-04T10:30:00Z"
 }
 ```
