@@ -17,3 +17,7 @@ reports/correlated_alerts.json
 reports/alerts.json.lock
 reports/alerts.json.corrupt
 reports/alerts.json.tmp
+
+# local backups, never commit
+*.bak
+*.save
