@@ -104,7 +104,7 @@ spec:
     spec:
       containers:
         - name: dashboard
-          image: ghcr.io/yuvraj-pandey-yuvi/purple-team-detection:aa7c7cd            # placeholder, resolved in 3.3
+          image: ghcr.io/yuvraj-pandey-yuvi/purple-team-detection:c099840            # placeholder, resolved in 3.3
           ports:
             - containerPort: 8000   # what port does uvicorn actually listen on?
           env:
