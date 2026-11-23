@@ -1,65 +1,138 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Purple Team Detection · live</title>
+<meta name="description" content="A live honeypot and detection pipeline on AWS: real attackers, real detections, mapped to MITRE ATT&CK.">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
-:root{--bg:#0a0e16;--p:#101722;--b:#1c2636;--t:#e6eaf2;--m:#8b98ad;--pu:#a78bfa;--cy:#22d3ee;--rd:#fb4d6a;--am:#f5a524;--gr:#34d399}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(1200px 500px at 70% -10%,#1a1440 0,transparent 60%),var(--bg);color:var(--t);font:14px/1.45 system-ui,Segoe UI,Roboto,sans-serif}
-.mono,td.ip,.kv{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid var(--b)}
-h1{margin:0;font-size:17px;letter-spacing:.14em;text-transform:uppercase}h1 b{color:var(--pu)}
-.pill{display:inline-flex;gap:8px;align-items:center;padding:4px 12px;border:1px solid var(--b);border-radius:99px;font-size:12px;color:var(--m)}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--m);display:inline-block}.ok{background:var(--gr);box-shadow:0 0 8px var(--gr)}.warn{background:var(--am)}.bad{background:var(--rd);box-shadow:0 0 8px var(--rd)}
-nav a{color:var(--m);text-decoration:none;margin-left:16px;font-size:13px}nav a:hover{color:var(--pu)}
-main{padding:20px 24px;display:grid;gap:16px;grid-template-columns:repeat(12,1fr);max-width:1400px;margin:auto}
-.card{background:linear-gradient(180deg,#121a28,var(--p));border:1px solid var(--b);border-radius:12px;padding:16px;min-width:0}
+:root{--bg:#070a12;--p:#0f1522;--p2:#0c111c;--b:#1b2436;--b2:#2a3556;--t:#e8ecf4;--m:#8b98ad;--pu:#a78bfa;--pu2:#7c5cf0;--cy:#22d3ee;--rd:#fb4d6a;--am:#f5a524;--gr:#34d399;--mono:ui-monospace,SFMono-Regular,"JetBrains Mono",Menlo,Consolas,monospace}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;color:var(--t);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:
+ radial-gradient(900px 420px at 85% -5%,#2a1a6b55 0,transparent 65%),radial-gradient(700px 380px at -5% 20%,#0e4f6a33 0,transparent 60%),
+ linear-gradient(#ffffff05 1px,transparent 1px) 0 0/44px 44px,linear-gradient(90deg,#ffffff05 1px,transparent 1px) 0 0/44px 44px,var(--bg)}
+.mono,td.ip,.kv{font-family:var(--mono)}
+a{color:var(--pu)}
+/* header */
+header{position:sticky;top:0;z-index:1200;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:space-between;padding:12px 24px;border-bottom:1px solid #1b243699;background:#070a12cc;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.brand{display:flex;gap:12px;align-items:center}.logo{width:30px;height:30px;flex:none}
+h1{margin:0;font-size:15px;letter-spacing:.16em;text-transform:uppercase}h1 b{color:var(--pu)}
+.by{color:var(--m);font-size:12px}
+.hr{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+.secnav{display:flex;gap:2px;flex-wrap:wrap}.secnav a{color:var(--m);text-decoration:none;font-size:12.5px;padding:5px 10px;border-radius:8px}.secnav a:hover{color:var(--t);background:#ffffff0a}.secnav a.on{color:var(--t);background:#a78bfa1f}
+nav.ext a{color:var(--m);text-decoration:none;margin-left:12px;font-size:12.5px}nav.ext a:hover{color:var(--pu)}
+.pill{display:inline-flex;gap:8px;align-items:center;padding:4px 12px;border:1px solid var(--b);border-radius:99px;font-size:12px;color:var(--m);background:#0b101a}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--m);display:inline-block;flex:none}.ok{background:var(--gr);box-shadow:0 0 0 0 #34d39988;animation:ping 2s infinite}.warn{background:var(--am)}.bad{background:var(--rd);box-shadow:0 0 8px var(--rd)}
+@keyframes ping{0%{box-shadow:0 0 0 0 #34d39988}80%,100%{box-shadow:0 0 0 7px #34d39900}}
+/* layout */
+main{padding:22px 24px;display:grid;gap:16px;grid-template-columns:repeat(12,1fr);max-width:1400px;margin:auto}
+.card{background:linear-gradient(180deg,#121a2a,var(--p));border:1px solid var(--b);border-radius:14px;padding:16px;min-width:0;transition:border-color .2s,box-shadow .2s}
+.card:hover{border-color:#2c3756;box-shadow:0 10px 40px -20px #7c5cf055}
 .card h2{margin:0 0 12px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--m);font-weight:600}
-.k{grid-column:span 3}.k .v{font-size:34px;font-weight:700;letter-spacing:-.02em}.k .s{color:var(--m);font-size:12px}
-.w8{grid-column:span 8}.w4{grid-column:span 4}.w6{grid-column:span 6}.w12{grid-column:span 12}
-#map{height:420px;border-radius:8px;background:#0b1220}.leaflet-container{font:inherit}.leaflet-tooltip{background:#0b1020;color:#e6eaf2;border:1px solid #a78bfa;box-shadow:none}.leaflet-tooltip-top:before{border-top-color:#a78bfa}
-.row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #172033}.row:last-child{border:0}.row .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.row .r{color:var(--m);font-size:12px;white-space:nowrap}
-.bar{position:relative;flex:1;height:22px;background:#0d1420;border-radius:5px;overflow:hidden}.bar i{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,#5b3fd0,var(--pu));border-radius:5px}.bar span{position:relative;padding:0 8px;line-height:22px;font-size:12px;font-family:ui-monospace,Menlo,monospace}
+.w8{grid-column:span 8}.w4{grid-column:span 4}.w6{grid-column:span 6}.w12{grid-column:span 12}.w7{grid-column:span 7}.w5{grid-column:span 5}
+.sec{grid-column:span 12;display:flex;gap:14px;align-items:baseline;margin:26px 0 -4px;scroll-margin-top:80px}
+.sec .no{font:600 12px var(--mono);color:var(--pu);border:1px solid #a78bfa55;border-radius:6px;padding:2px 7px}
+.sec h2{margin:0;font-size:20px;letter-spacing:-.01em}.sec p{margin:0;color:var(--m);font-size:13px}
+#top{scroll-margin-top:80px}
+/* hero */
+.hero{display:grid;grid-template-columns:1.15fr 1fr;gap:28px;align-items:center;padding:26px}
+.eyb{display:inline-flex;gap:8px;align-items:center;font:600 11px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--gr);background:#0f2a24;border:1px solid #1f7a5a;border-radius:99px;padding:4px 12px}
+.hero h2.big{margin:14px 0 10px;font-size:clamp(28px,3.6vw,44px);line-height:1.08;letter-spacing:-.03em;text-transform:none;color:var(--t);font-weight:750}
+.hero h2.big em{font-style:normal;background:linear-gradient(90deg,var(--pu),var(--cy));-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p{margin:0 0 18px;max-width:640px;font-size:15px;line-height:1.65;color:#c5cddb}.hero p b{color:var(--t)}
+.cta{display:flex;flex-wrap:wrap;gap:10px}.cta a{text-decoration:none;font-size:13px;padding:8px 14px;border-radius:9px;border:1px solid var(--b2);color:var(--t);background:#121a2e}.cta a.pri{background:linear-gradient(90deg,var(--pu2),#5b3fd0);border-color:#8f74ff}.cta a:hover{filter:brightness(1.15)}
+/* terminal */
+.term{background:#05070c;border:1px solid #232d44;border-radius:12px;overflow:hidden;box-shadow:0 30px 60px -30px #000,0 0 0 1px #ffffff05 inset}
+.tbar{display:flex;gap:7px;align-items:center;padding:9px 12px;background:#0d1220;border-bottom:1px solid #1b2436;font:12px var(--mono);color:var(--m)}.tbar i{width:10px;height:10px;border-radius:50%;background:#2a3346}.tbar i:nth-child(1){background:#fb4d6a}.tbar i:nth-child(2){background:#f5a524}.tbar i:nth-child(3){background:#34d399}.tbar span{margin-left:8px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tbar .rec{color:var(--rd);font-weight:700;flex:none}
+#termb{height:290px;padding:12px 14px;font:12.5px/1.6 var(--mono);color:#cfd7e6;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}
+#termb div{white-space:pre-wrap;overflow-wrap:anywhere}#termb .pr{color:var(--gr)}#termb .cm{color:#6b7891}#termb .sys{color:var(--am)}
+.caret{display:inline-block;width:7px;height:14px;background:var(--gr);vertical-align:-2px;animation:blink 1s steps(1) infinite}@keyframes blink{50%{opacity:0}}
+.tnote{padding:8px 14px;border-top:1px solid #1b2436;color:var(--m);font-size:11.5px;background:#0a0f1a}
+/* findings + kpis */
+.fg{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.fg div{background:#0c121dcc;border:1px solid var(--b);border-radius:12px;padding:14px 16px;position:relative;overflow:hidden}.fg div:before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:linear-gradient(var(--pu),var(--cy))}
+.fg b{display:block;font-size:30px;color:var(--pu);letter-spacing:-.02em}.fg span{color:var(--m);font-size:13px}
+.k{grid-column:span 3;position:relative;overflow:hidden}.k .v{font-size:36px;font-weight:750;letter-spacing:-.03em;font-variant-numeric:tabular-nums}.k .s{color:var(--m);font-size:12px}
+.k svg.sp{position:absolute;right:0;bottom:0;width:58%;height:54px;opacity:.9}
+.ring{position:absolute;right:16px;top:50%;transform:translateY(-50%);width:76px;height:76px}
+/* flow */
+.flow{display:grid;grid-template-columns:minmax(240px,1.25fr) 34px 1fr 34px 1fr 34px 1fr 34px 1fr;align-items:center;gap:0}
+.fcol{display:grid;gap:6px}.fn{background:#0c121d;border:1px solid var(--b);border-radius:10px;padding:9px 11px}
+.fn.src{display:flex;gap:10px;align-items:center;padding:7px 10px}.fn.src b{display:block;font-size:12.5px}.fn.src span{color:var(--m);font-size:11.5px}.fn.s-not_monitored{opacity:.55}
+.fn.step{min-height:96px;display:flex;flex-direction:column;justify-content:center}.fn.step small{font:600 10px var(--mono);color:var(--pu);letter-spacing:.1em}.fn.step b{font-size:15px;margin:2px 0}.fn.step span{color:var(--m);font-size:12px}
+.fa{height:2px;margin:0 4px;background:repeating-linear-gradient(90deg,var(--pu) 0 6px,transparent 6px 12px);background-size:24px 2px;animation:flowx 1s linear infinite;position:relative}.fa:after{content:"";position:absolute;right:-2px;top:-4px;border:5px solid transparent;border-left:6px solid var(--pu)}
+@keyframes flowx{to{background-position:24px 0}}
+/* map */
+#map{height:440px;border-radius:10px;background:#0b1220}.leaflet-container{font:inherit;background:#0b1220}.leaflet-tooltip{background:#0b1020;color:#e6eaf2;border:1px solid #a78bfa;box-shadow:none}.leaflet-tooltip-top:before{border-top-color:#a78bfa}
+.arc{stroke-dasharray:3 9;animation:dash 1.4s linear infinite}@keyframes dash{to{stroke-dashoffset:-24}}
+.srv{position:relative}.srv b{position:absolute;inset:5px;border-radius:50%;background:var(--cy);box-shadow:0 0 12px var(--cy)}.srv i{position:absolute;inset:0;border-radius:50%;border:2px solid var(--cy);animation:pulse 2.2s ease-out infinite}.srv i+i{animation-delay:1.1s}
+@keyframes pulse{0%{transform:scale(.6);opacity:1}100%{transform:scale(3.2);opacity:0}}
+.mh{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}.mh h2{margin:0}.tog{display:flex;gap:6px;align-items:center;color:var(--m);font-size:12px;cursor:pointer}.tog input{accent-color:var(--pu)}
+/* lists, bars, tables (unchanged look, tuned) */
+.row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #172033}.row:last-child{border:0}.row .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.row .r{color:var(--m);font-size:12px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.bar{position:relative;flex:1;height:22px;background:#0d1420;border-radius:6px;overflow:hidden}.bar i{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,#4b33b8,var(--pu));border-radius:6px;transform-origin:left;animation:grow .9s cubic-bezier(.2,.8,.2,1)}.bar span{position:relative;padding:0 8px;line-height:22px;font-size:12px;font-family:var(--mono)}
+@keyframes grow{from{transform:scaleX(0)}}
 table{width:100%;border-collapse:collapse;font-size:13px}th{color:var(--m);font-weight:600;font-size:11px;text-align:left;letter-spacing:.1em;text-transform:uppercase;padding:0 6px 8px}td{padding:6px;border-top:1px solid #172033}td.num{text-align:right;font-variant-numeric:tabular-nums}
+#att td{padding:7px 6px}#att tr:first-child td.ip{color:var(--t)}#att .rk{color:#55627a;font:11px var(--mono);width:22px}
 .sev{font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;letter-spacing:.06em}.CRITICAL{background:#5b1325;color:#ff8fa5}.HIGH{background:#5a3207;color:#ffc069}.MEDIUM{background:#4a3f0a;color:#ffe27a}.LOW,.INFO{background:#16314a;color:#8ecbff}
-.chips{display:flex;flex-wrap:wrap;gap:8px}.chip{border:1px solid var(--b);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--m)}.chip.on{border-color:#1f7a5a;color:var(--t);background:#0f2a24}.chip b{font-family:ui-monospace,Menlo,monospace;color:var(--gr)}.chip:not(.on) b{color:var(--m)}
-.ah{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:6px}.ah h2{margin:0}.actl{display:flex;gap:14px;align-items:center;color:var(--m);font-size:12px}.actl select{background:#0d1420;color:var(--t);border:1px solid #2a3556;border-radius:8px;padding:6px 8px;font:inherit}
-.row .cmd{font-family:ui-monospace,Menlo,monospace;font-size:12px;overflow-wrap:anywhere;white-space:normal}.ex{color:var(--m);font-size:12px;margin:-2px 0 6px}.zero{color:var(--m)}
+.ah{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:6px}.ah h2{margin:0}.actl{display:flex;gap:14px;align-items:center;color:var(--m);font-size:12px}.actl select{background:#0d1420;color:var(--t);border:1px solid var(--b2);border-radius:8px;padding:6px 8px;font:inherit}
+.row .cmd{font-family:var(--mono);font-size:12px;overflow-wrap:anywhere;white-space:normal}.ex{color:var(--m);font-size:12px;margin:-2px 0 6px}.zero{color:var(--m)}
 tr.cl{cursor:pointer}tr.cl:hover td{background:#131c2c}.rt td{vertical-align:top}.rt a{color:var(--pu)}
-.dr{position:fixed;inset:0;background:#05080ecc;display:none;z-index:1000;justify-content:flex-end}.dr.on{display:flex}.dp{width:min(520px,100%);height:100%;overflow:auto;background:#0e1522;border-left:1px solid var(--b);padding:20px}.dp h3{margin:0 0 4px;font:600 18px ui-monospace,Menlo,monospace}.dp h4{margin:16px 0 6px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--m)}
-.dx{float:right;background:none;border:1px solid #2a3556;color:var(--t);border-radius:8px;padding:4px 10px;cursor:pointer;font:inherit}.st{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.st div{background:#0c121d;border:1px solid var(--b);border-radius:8px;padding:8px 10px}.st b{display:block;font-size:18px}.st span{color:var(--m);font-size:11px}
-.hero p{margin:0 0 14px;max-width:920px;font-size:15px;line-height:1.6}.fg{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.fg div{background:#0c121d;border:1px solid var(--b);border-radius:10px;padding:12px 14px}.fg b{display:block;font-size:30px;color:var(--pu);letter-spacing:-.02em}.fg span{color:var(--m);font-size:13px}
+.st0{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;background:#2a3346}.st0.real{background:var(--gr);box-shadow:0 0 6px var(--gr)}.st0.testing{background:var(--am)}
+.dr{position:fixed;inset:0;background:#05080ecc;display:none;z-index:1500;justify-content:flex-end}.dr.on{display:flex}.dp{width:min(520px,100%);height:100%;overflow:auto;background:#0e1522;border-left:1px solid var(--b);padding:20px;animation:slin .2s ease-out}@keyframes slin{from{transform:translateX(30px);opacity:0}}
+.dp h3{margin:0 0 4px;font:600 18px var(--mono)}.dp h4{margin:16px 0 6px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--m)}
+.dx{float:right;background:none;border:1px solid var(--b2);color:var(--t);border-radius:8px;padding:4px 10px;cursor:pointer;font:inherit}.st{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.st div{background:#0c121d;border:1px solid var(--b);border-radius:8px;padding:8px 10px}.st b{display:block;font-size:18px}.st span{color:var(--m);font-size:11px}
 .sb{color:var(--pu);text-transform:none;letter-spacing:0;font-weight:500}.sc .ex{margin:2px 0 0}
-.mx{display:grid;grid-template-columns:repeat(7,minmax(135px,1fr));gap:10px;overflow-x:auto}.mx h3{margin:0 0 8px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--m)}.tq{border:1px solid var(--b);border-radius:8px;padding:6px 8px;margin-bottom:6px;font-size:12px;color:var(--m)}.tq.on{border-color:#1f7a5a;background:#0f2a24;color:var(--t)}.tq b{display:block;font-family:ui-monospace,Menlo,monospace;color:var(--m)}.tq.on b{color:var(--gr)}.tq.tst{border-color:#8a6a1f;background:#2a2410;color:var(--t)}.tq.tst b{color:var(--am)}.tg{font:600 10px system-ui,sans-serif;padding:1px 6px;border-radius:5px;background:#4a3f0a;color:#ffe27a;margin-left:6px;letter-spacing:.04em}.dl{color:var(--pu);text-decoration:none}
-.leg{display:flex;gap:16px;color:var(--m);font-size:12px;margin-top:6px}.leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}
+.mx{display:grid;grid-template-columns:repeat(7,minmax(135px,1fr));gap:10px;overflow-x:auto}.mx h3{margin:0 0 8px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--m)}.tq{border:1px solid var(--b);border-radius:8px;padding:6px 8px;margin-bottom:6px;font-size:12px;color:var(--m)}.tq.on{border-color:#1f7a5a;background:#0f2a24;color:var(--t);box-shadow:0 0 18px -8px var(--gr)}.tq b{display:block;font-family:var(--mono);color:var(--m)}.tq.on b{color:var(--gr)}.tq.tst{border-color:#8a6a1f;background:#2a2410;color:var(--t)}.tq.tst b{color:var(--am)}.tg{font:600 10px system-ui,sans-serif;padding:1px 6px;border-radius:5px;background:#4a3f0a;color:#ffe27a;margin-left:6px;letter-spacing:.04em}.dl{color:var(--pu);text-decoration:none}
+.leg{display:flex;flex-wrap:wrap;gap:16px;color:var(--m);font-size:12px;margin-top:6px}.leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}
 #err{display:none;margin:12px 24px;padding:10px 14px;border:1px solid var(--rd);border-radius:8px;color:#ffb3c0}
 footer{color:var(--m);font-size:12px;padding:8px 24px 28px;max-width:1400px;margin:auto}
-@media(max-width:980px){.k{grid-column:span 6}.w8,.w4,.w6{grid-column:span 12}}@media(max-width:520px){.k{grid-column:span 12}}
+.rv{opacity:0;transform:translateY(14px);transition:opacity .6s ease,transform .6s ease}.rv.in{opacity:1;transform:none}
+@media(max-width:1100px){.flow{grid-template-columns:1fr;gap:8px}.fa{width:2px;height:22px;margin:0 auto;background:repeating-linear-gradient(180deg,var(--pu) 0 6px,transparent 6px 12px);background-size:2px 24px;animation:flowy 1s linear infinite}.fa:after{right:-4px;top:auto;bottom:-6px;border:5px solid transparent;border-top:6px solid var(--pu)}.secnav{display:none}}
+@keyframes flowy{to{background-position:0 24px}}
+@media(max-width:980px){.hero{grid-template-columns:1fr}.k{grid-column:span 6}.w8,.w4,.w6,.w7,.w5{grid-column:span 12}}
+@media(max-width:520px){.k{grid-column:span 12}main{padding:16px 12px}header{padding:10px 12px;position:static}.sec{flex-wrap:wrap;gap:6px 12px}.sec p{flex-basis:100%}#termb{height:230px}.hero{padding:18px}nav.ext a{margin:0 12px 0 0}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}.rv{opacity:1;transform:none}html{scroll-behavior:auto}}
 </style></head><body>
-<header><div><h1>Purple Team <b>Detection</b></h1><div style="color:var(--m);font-size:12px;margin-top:2px">Live honeypot &amp; detection pipeline on AWS · by Yuvraj Pandey</div></div>
-<div><span class="pill"><span class="dot" id="dot"></span><span id="status">connecting…</span></span>
-<nav style="display:inline-block"><a href="https://github.com/Yuvraj-pandey-yuvi/purple-team-detection" target="_blank" rel="noopener noreferrer">GitHub</a><a href="https://www.linkedin.com/in/yuvraj-pandey-797401337" target="_blank" rel="noopener noreferrer">LinkedIn</a><a href="https://medium.com/@yuvrajpandeyfaltu/how-i-built-a-purple-team-detection-pipeline-that-caught-real-attackers-as-a-2nd-year-cs-student-b30c69d65ddd" target="_blank" rel="noopener noreferrer">Write-up</a></nav></div></header>
+<header><div class="brand"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a78bfa"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs><path d="M16 2 4 7v8c0 7.5 5.1 13.2 12 15 6.9-1.8 12-7.5 12-15V7z" fill="none" stroke="url(#lg)" stroke-width="2"/><circle cx="16" cy="15" r="6" fill="none" stroke="#a78bfa" stroke-opacity=".5"/><circle cx="16" cy="15" r="2" fill="#22d3ee"/><path d="M16 15 21 10" stroke="#22d3ee" stroke-width="1.6"><animateTransform attributeName="transform" type="rotate" from="0 16 15" to="360 16 15" dur="4s" repeatCount="indefinite"/></path></svg>
+<div><h1>Purple Team <b>Detection</b></h1><div class="by">Live honeypot &amp; detection pipeline on AWS · by Yuvraj Pandey</div></div></div>
+<nav class="secnav" id="secnav"><a href="#top">Overview</a><a href="#s-pipe">Pipeline</a><a href="#s-att">Attackers</a><a href="#s-tried">Behaviour</a><a href="#s-time">Timeline</a><a href="#s-det">Detections</a></nav>
+<div class="hr"><span class="pill"><span class="dot" id="dot"></span><span id="status">connecting…</span></span>
+<nav class="ext"><a href="https://github.com/Yuvraj-pandey-yuvi/purple-team-detection" target="_blank" rel="noopener noreferrer">GitHub</a><a href="https://www.linkedin.com/in/yuvraj-pandey-797401337" target="_blank" rel="noopener noreferrer">LinkedIn</a><a href="https://medium.com/@yuvrajpandeyfaltu/how-i-built-a-purple-team-detection-pipeline-that-caught-real-attackers-as-a-2nd-year-cs-student-b30c69d65ddd" target="_blank" rel="noopener noreferrer">Write-up</a></nav></div></header>
 <div id="err"></div>
 <main>
-<div class="card w12 hero"><h2>What you are looking at</h2><p>This is a live security system I built and run on AWS. A <b>honeypot</b>, a decoy server that looks vulnerable, so every visitor is an attacker, collects real attacks from the internet. A detection engine checks logs from the server, the honeypot and AWS against 18 rules mapped to <b>MITRE ATT&amp;CK</b>. Everything below is real data, refreshed every 5 minutes.</p><div class="fg" id="fnd"></div></div>
-<div class="card k"><h2>Honeypot sessions · 24h</h2><div class="v" id="k1">–</div><div class="s" id="k1s"></div></div>
+<div class="card w12 hero" id="top"><div><span class="eyb"><span class="dot ok"></span>Live · AWS eu-north-1</span>
+<h2 class="big">Every visitor to this server<br>is an <em>attacker</em>.</h2>
+<p>This is a live security system I built and run on AWS. A <b>honeypot</b>, a decoy server that looks vulnerable, collects real attacks from the internet. A detection engine checks logs from the server, the honeypot and AWS against 18 rules mapped to <b>MITRE ATT&amp;CK</b>. Everything below is real data, refreshed every 5 minutes.</p>
+<div class="cta"><a class="pri" href="#s-att">See who is attacking →</a><a href="/alerts">Browse alerts</a><a href="https://github.com/Yuvraj-pandey-yuvi/purple-team-detection" target="_blank" rel="noopener noreferrer">Read the code</a></div></div>
+<div class="term" aria-label="Replay of the most common commands attackers typed into the honeypot"><div class="tbar"><i></i><i></i><i></i><span>ssh session · honeypot · replay</span><b class="rec">● REC</b></div><div id="termb"></div><div class="tnote">A re-enactment built from the most common <b>real</b> commands attackers typed after logging in. The counts are real.</div></div></div>
+<div class="w12"><div class="fg" id="fnd"></div></div>
+<div class="card k"><h2>Honeypot sessions · 24h</h2><div class="v" id="k1">–</div><div class="s" id="k1s"></div><svg class="sp" id="sp1" viewBox="0 0 120 40" preserveAspectRatio="none" aria-hidden="true"></svg></div>
 <div class="card k"><h2>Unique attackers · 24h</h2><div class="v" id="k2">–</div><div class="s" id="k2s"></div></div>
-<div class="card k"><h2>Alerts · 24h</h2><div class="v" id="k3">–</div><div class="s" id="k3s"></div></div>
-<div class="card k"><h2>ATT&amp;CK coverage</h2><div class="v" id="k4">–</div><div class="s" id="k4s"></div></div>
+<div class="card k"><h2>Alerts · 24h</h2><div class="v" id="k3">–</div><div class="s" id="k3s"></div><svg class="sp" id="sp3" viewBox="0 0 120 40" preserveAspectRatio="none" aria-hidden="true"></svg></div>
+<div class="card k"><h2>ATT&amp;CK coverage</h2><div class="v" id="k4">–</div><div class="s" id="k4s" style="max-width:60%"></div><svg class="ring" id="ring" viewBox="0 0 80 80" aria-hidden="true"></svg></div>
+
+<div class="sec" id="s-pipe"><span class="no">01</span><h2>How it works, live</h2><p>Each log source, and when it last sent data.</p></div>
+<div class="card w12"><div class="flow" id="flow"></div></div>
+
+<div class="sec" id="s-att"><span class="no">02</span><h2>The attackers</h2><p>Where they connect from and who is the busiest.</p></div>
 <div class="card w12 sc"><div class="ah"><h2>Attacker statistics</h2><span class="actl"><label>Show <select id="scope"></select></label><button class="btn" id="screset" style="display:none">Back to all time</button><a class="btn" id="sca" href="/alerts" style="display:none">Alerts for this day →</a></span></div><div class="ex" id="scn"></div><div class="ex" id="scx">A honeypot session is a connection to a decoy server. Most scanners connect and leave without logging in, so they show up here but trigger no alert. Alerts come from detection rules, for example SSH brute force against the real server; those attackers carry an <span class="tg">SSH</span> tag and amber dots on the map.</div></div>
-<div class="card w8"><h2>Where attackers connect from<span class="sb"></span></h2><div id="map"></div><div class="ex">Locations are approximate (estimated from IP addresses). Red: honeypot visitors. Amber: SSH scanners caught by detections. Click a dot for details.<span id="mapn"></span></div></div>
+<div class="card w8"><div class="mh"><h2>Where attackers connect from<span class="sb"></span></h2><label class="tog"><input type="checkbox" id="arcs" checked> attack paths</label></div><div id="map"></div><div class="leg"><span><i style="background:var(--rd)"></i>honeypot visitors</span><span><i style="background:var(--am)"></i>SSH scanners caught by detections</span><span><i style="background:var(--cy);border-radius:50%"></i>my server (eu-north-1)</span></div><div class="ex" style="margin-top:6px">Locations are approximate (estimated from IP addresses). Paths are drawn for the busiest attackers only. Click a dot for details.<span id="mapn"></span></div></div>
 <div class="card w4"><h2>Most active attackers<span class="sb"></span></h2><table><tbody id="att"></tbody></table><div class="ex">Click an attacker for details.</div></div>
-<div class="card w4"><h2>When attacks happen (UTC hour)<span class="sb"></span></h2><svg id="hrs" viewBox="0 0 320 128" width="100%" role="img" aria-label="Sessions by hour of day"></svg><div class="ex">A few automated sources dominate, so this shows their schedule more than attackers in general.</div></div>
-<div class="card w4"><h2>Attacks by country<span class="sb"></span></h2><div id="cty"></div><div class="ex" id="ctys"></div></div>
-<div class="card w4"><h2>Attacks by network<span class="sb"></span></h2><div id="net"></div></div>
+<div class="card w6"><h2>Attacks by country<span class="sb"></span></h2><div id="cty"></div><div class="ex" id="ctys"></div></div>
+<div class="card w6"><h2>Attacks by network<span class="sb"></span></h2><div id="net"></div></div>
+
+<div class="sec" id="s-tried"><span class="no">03</span><h2>What they tried</h2><p>Credentials guessed and commands run after getting in.</p></div>
 <div class="card w4"><h2>Usernames tried<span class="sb"></span></h2><div id="usr"></div></div>
 <div class="card w4"><h2>Passwords tried<span class="sb"></span></h2><div id="pwd"></div></div>
 <div class="card w4"><h2>What attackers ran after getting in<span class="sb"></span></h2><div id="cmd"></div><div class="ex" id="cmds"></div><div class="ex">Explanations are written by hand from public honeypot research. Commands not on the list have none.</div></div>
+
+<div class="sec" id="s-time"><span class="no">04</span><h2>Over time</h2><p>Click a day to filter every panel above.</p></div>
 <div class="card w8"><h2>Last 30 days · click a day to filter the statistics above</h2><svg id="tl" viewBox="0 0 640 170" width="100%" role="img" aria-label="Daily honeypot sessions and alerts"></svg><div class="leg"><span><i style="background:var(--pu)"></i>honeypot sessions</span><span><i style="background:var(--cy)"></i>detection alerts</span></div><div id="tlnote" style="color:var(--m);font-size:12px;margin-top:4px"></div></div>
-<div class="card w4"><h2>Pipeline health</h2><div id="pipe"></div></div>
+<div class="card w4"><h2>When attacks happen (UTC hour)<span class="sb"></span></h2><svg id="hrs" viewBox="0 0 320 128" width="100%" role="img" aria-label="Sessions by hour of day"></svg><div class="ex">A few automated sources dominate, so this shows their schedule more than attackers in general.</div></div>
 <div class="card w12"><h2>Who attacked when · the 8 most active attackers, all time</h2><svg id="cp" viewBox="0 0 900 200" width="100%" role="img" aria-label="Attacker activity by day"></svg><div class="ex" id="cpn"></div></div>
+
+<div class="sec" id="s-det"><span class="no">05</span><h2>Detections</h2><p>What the rules caught, and which ATT&amp;CK techniques they cover.</p></div>
 <div class="card w12"><div class="ah"><h2>Alerts · last 24 hours</h2><span class="actl"><label>Sort by <select id="asort"><option value="priority">Priority</option><option value="time">Time (newest)</option></select></label><a class="btn" href="/alerts">Browse alerts by day →</a></span></div><div id="alist"></div></div>
-<div class="card w12"><h2>MITRE ATT&amp;CK matrix<span class="sb" id="mxv"></span></h2><div class="mx" id="mx"></div><div class="ex">Green: fired on real traffic. Amber: fired only during my own testing. Grey: not triggered yet.</div></div>
+<div class="card w12"><h2>MITRE ATT&amp;CK matrix<span class="sb" id="mxv"></span></h2><div class="mx" id="mx"></div><div class="leg"><span><i style="background:var(--gr)"></i>fired on real traffic</span><span><i style="background:var(--am)"></i>fired only during my own testing</span><span><i style="background:#2a3346"></i>not triggered yet</span></div></div>
 <div class="card w12"><h2>Detection rules · how often each has fired (click a rule name to see its alerts)</h2><div style="overflow-x:auto"><table class="rt"><thead><tr><th>Rule</th><th>ID</th><th>ATT&amp;CK</th><th>Source</th><th style="text-align:right">Real traffic</th><th style="text-align:right">My testing</th><th style="text-align:right">Last 24 h</th><th>Last fired</th></tr></thead><tbody id="rl"></tbody></table></div></div>
 </main>
 <div class="dr" id="dr"><div class="dp"><button class="dx" id="dx">Close ✕</button><div id="drb"></div></div></div>
@@ -76,10 +149,8 @@ function clear(n){while(n.firstChild)n.removeChild(n.firstChild)}
 function kpi(i,v,s){$("#k"+i).textContent=v;$("#k"+i+"s").textContent=s}
 function render(s){S=s;const t=s.totals,age=(Date.now()-new Date(s.generated_at))/6e4;
  $("#dot").className="dot "+(age<15?"ok":"warn");$("#status").textContent=(age<15?"LIVE":"STALE")+" · updated "+ago(s.generated_at);
- kpi(1,fmt(t.honeypot_sessions_24h),fmt(t.honeypot_sessions_total)+" all time");kpi(2,fmt(t.attackers_24h),fmt(t.attackers_total)+" all time");
- kpi(3,fmt(t.alerts_24h),t.critical_24h+" critical · "+t.high_24h+" high");kpi(4,s.coverage.pct+"%",s.coverage.real+" on real traffic · "+s.coverage.testing+" in my own testing");
- const p=$("#pipe");clear(p);s.pipeline.forEach(r=>{const row=el("div","row"),d=el("span","dot "+({ok:"ok",waiting:"warn",silent:"bad"}[r.status]||""));
-  row.append(d,el("span","n",r.source.replace("_"," ")),el("span","r",{ok:"last input "+ago(r.last_input),waiting:"waiting for first input",silent:"silent "+r.silent_hours+" h",not_monitored:"not monitored",unknown:"unknown"}[r.status]));p.append(row)});
+ kpis(s);
+ flow(s);
  timeline(s);
  rulesTable(s);findings(s);campaigns(s);scopeInit(s);
  matrix(s);
@@ -87,7 +158,7 @@ function render(s){S=s;const t=s.totals,age=(Date.now()-new Date(s.generated_at)
  alerts(false)}
 const $$=s=>[...document.querySelectorAll(s)];let scope="all",STATS=null,drawnScope=null;
 function rulesTable(s){const rl=$("#rl");clear(rl);(s.rules||[]).forEach(r=>{const tr=el("tr"),nm=el("td"),id=el("td","ip");
-  if(r.total>0){const a=el("a","",r.name);a.href="/alerts?day=all&sort=time&rule="+encodeURIComponent(r.id);nm.append(a)}else nm.append(el("div","",r.name));
+  nm.append(el("span","st0 "+(r.state||"never")));if(r.total>0){const a=el("a","",r.name);a.href="/alerts?day=all&sort=time&rule="+encodeURIComponent(r.id);nm.append(a)}else nm.append(el("div","",r.name));
   nm.append(el("div","ex",r.what));id.textContent=r.id;
   tr.append(nm,id,el("td","",r.technique),el("td","",r.source),el("td","num"+(r.total?"":" zero"),r.total?fmt(r.total):(r.testing?"–":"never")),el("td","num"+(r.testing?"":" zero"),r.testing?fmt(r.testing):"–"),el("td","num"+(r.last_24h?"":" zero"),fmt(r.last_24h)),el("td","zero",r.last_seen?r.last_seen.slice(0,10):"–"));rl.append(tr)})}
 function findings(s){const f=$("#fnd");clear(f);(s.findings||[]).forEach(x=>{const d=el("div");d.append(el("b","",x.stat),el("span","",x.text));f.append(d)})}
@@ -123,11 +194,11 @@ function renderScope(st){const all=st.day==="all";
  $("#scn").textContent=(all?"All time: ":"On "+st.day+": ")+fmt(st.sessions)+" honeypot sessions from "+fmt(st.attackers_count)+" IP addresses, "+fmt(st.attempts)+" login attempts."+(st.ssh_scanners?" Detections also caught "+fmt(st.ssh_scanners)+" SSH scanner"+(st.ssh_scanners>1?"s":"")+" on the real server.":"");
  pins=(st.map||[]).map(p=>({ip:p.ip,lat:p.lat,lon:p.lon,place:p.cc||"",n:p.sessions+(p.kind==="ssh"?p.alerts:0),kind:p.kind}));if(drawnScope!==st.day){fitted=false;drawnScope=st.day}drawMap();$("#mapn").textContent=st.map_total>(st.map||[]).length?" Showing the "+fmt(st.map.length)+" most active of "+fmt(st.map_total)+" located attackers.":"";
  const at=$("#att");clear(at);if(!st.attackers.length){const tr=el("tr");tr.append(el("td","zero","No honeypot activity in this period."));at.append(tr)}
- st.attackers.slice(0,10).forEach(a=>{const tr=el("tr","cl"),ip=el("td","ip",a.ip);ip.title=[a.country,a.network].filter(Boolean).join(" · ");tr.onclick=()=>openAttacker(a.ip);if(a.kind!=="honeypot")ip.append(el("span","tg","SSH"));const b=el("td","num",a.sessions?fmt(a.sessions):fmt(a.alerts)+" alert"+(a.alerts>1?"s":""));b.style.color="var(--pu)";tr.append(ip,el("td","",a.cc||"··"),b);at.append(tr)});
- hours(st.hours);bars("#cty",st.countries.map(c=>({value:c.country+" ("+c.cc+")",count:c.sessions})));bars("#net",st.networks.map(n=>({value:n.network,count:n.sessions})));bars("#usr",st.usernames);bars("#pwd",st.passwords);
+ st.attackers.slice(0,10).forEach(a=>{const tr=el("tr","cl"),ip=el("td","ip",a.ip);ip.title=[a.country,a.network].filter(Boolean).join(" · ");tr.onclick=()=>openAttacker(a.ip);if(a.kind!=="honeypot")ip.append(el("span","tg","SSH"));const b=el("td","num",a.sessions?fmt(a.sessions):fmt(a.alerts)+" alert"+(a.alerts>1?"s":""));b.style.color="var(--pu)";tr.append(el("td","rk",String(at.children.length+1)),ip,el("td","",flag(a.cc)+" "+(a.cc||"··")),b);at.append(tr)});
+ hours(st.hours);bars("#cty",st.countries.map(c=>({value:flag(c.cc)+"  "+c.country,count:c.sessions})));bars("#net",st.networks.map(n=>({value:n.network,count:n.sessions})));bars("#usr",st.usernames);bars("#pwd",st.passwords);
  if(!st.networks.length&&st.sessions)$("#net").textContent="Network owners are still being collected…";
  $$("#cty,#net,#usr,#pwd").forEach(n=>{if(!n.firstChild)n.textContent="No activity in this period."});
- $("#ctys").textContent=st.sessions?Math.round(100*st.located_sessions/st.sessions)+"% of these sessions come from IP addresses that could be located so far.":"";commands(st.commands)}
+ $("#ctys").textContent=st.sessions?Math.round(100*st.located_sessions/st.sessions)+"% of these sessions come from IP addresses that could be located so far.":"";commands(st.commands);if(all)startTerm(st.commands,st.usernames)}
 $("#scope").addEventListener("change",e=>setScope(e.target.value));$("#screset").addEventListener("click",()=>setScope("all"));
 async function openAttacker(ip){const d=$("#dr"),b=$("#drb");d.classList.add("on");b.textContent="Loading…";
  try{const r=await fetch("/api/attackers/"+encodeURIComponent(ip),{cache:"no-store"});
@@ -173,12 +244,68 @@ let map=null,layer=null,fitted=false;
 async function initMap(){if(!window.L){$("#map").textContent="Map library could not be loaded.";return}
  map=L.map("map",{minZoom:2,maxZoom:8,worldCopyJump:true}).setView([25,10],2);layer=L.layerGroup().addTo(map);let key="";
  try{key=(await(await fetch("/config")).json()).map_key||""}catch(e){}
- L.tileLayer("https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png"+(key?"?key="+encodeURIComponent(key):""),{maxZoom:18,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}).addTo(map);drawMap()}
-function drawMap(){if(!map)return;layer.clearLayers();const mx=Math.max(1,...pins.map(p=>p.n));
+ L.tileLayer("https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png"+(key?"?key="+encodeURIComponent(key):""),{maxZoom:18,attribution:"&copy; OpenStreetMap contributors &copy; CARTO"}).addTo(map);arcLayer=L.layerGroup().addTo(map);serverMarker();drawMap()}
+function drawMap(){if(!map)return;layer.clearLayers();drawArcs();const mx=Math.max(1,...pins.map(p=>p.n));
  pins.forEach(p=>{const m=L.circleMarker([p.lat,p.lon],{radius:5+11*Math.sqrt(p.n/mx),color:p.kind==="ssh"?"#f5a524":"#fb4d6a",weight:1.5,fillColor:p.kind==="ssh"?"#f5a524":"#fb4d6a",fillOpacity:.5}).addTo(layer);
   const tip=el("div","",p.ip+" · "+(p.place||"unknown")+(p.kind==="ssh"?" · SSH scanner":" · "+fmt(p.n)+" events"));m.bindTooltip(tip);m.on("click",()=>openAttacker(p.ip))});
  if(pins.length&&!fitted){map.fitBounds(pins.map(p=>[p.lat,p.lon]),{maxZoom:4,padding:[30,30]});fitted=true}}
 async function load(){try{const r=await fetch("/summary",{cache:"no-store"});if(!r.ok)throw new Error("HTTP "+r.status);render(await r.json());$("#err").style.display="none"}
  catch(e){const b=$("#err");b.textContent="Cannot load live data ("+e.message+"). Retrying…";b.style.display="block";$("#dot").className="dot bad";$("#status").textContent="OFFLINE"}}
+/* ---------- added in the visual upgrade: everything below only reads data the page already loads ---------- */
+const REDUCE=matchMedia("(prefers-reduced-motion: reduce)").matches,NSV="http://www.w3.org/2000/svg";
+const flag=cc=>/^[A-Z]{2}$/.test(cc||"")?String.fromCodePoint(...[...cc].map(c=>127397+c.charCodeAt(0))):"🏳";
+const svgEl=(svg,t,a)=>{const e=document.createElementNS(NSV,t);for(const k in a)e.setAttribute(k,a[k]);svg.append(e);return e};
+let counted=false;
+function countTo(node,value,fmtFn){if(REDUCE||counted){node.textContent=fmtFn(value);return}const t0=performance.now(),D=1100;
+ const step=t=>{const k=Math.min(1,(t-t0)/D),e=1-Math.pow(1-k,3);node.textContent=fmtFn(value*e);if(k<1)requestAnimationFrame(step)};requestAnimationFrame(step)}
+function spark(id,vals,color){const svg=$(id);if(!svg)return;clear(svg);if(!vals.length)return;
+ const v=vals.map(x=>Math.log10(1+x)),mx=Math.max(.001,...v),W=120,H=40,dx=W/Math.max(1,v.length-1),pts=v.map((y,i)=>[i*dx,H-3-(y/mx)*(H-8)]);
+ const gid="g"+id.slice(1),d=svgEl(svg,"defs",{}),g=document.createElementNS(NSV,"linearGradient");g.setAttribute("id",gid);g.setAttribute("x1",0);g.setAttribute("y1",0);g.setAttribute("x2",0);g.setAttribute("y2",1);
+ [["0",color,".35"],["1",color,"0"]].forEach(([o,c,op])=>{const s=document.createElementNS(NSV,"stop");s.setAttribute("offset",o);s.setAttribute("stop-color",c);s.setAttribute("stop-opacity",op);g.append(s)});d.append(g);
+ const line=pts.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+ svgEl(svg,"path",{d:line+" L"+W+" "+H+" L0 "+H+" Z",fill:"url(#"+gid+")"});svgEl(svg,"path",{d:line,fill:"none",stroke:color,"stroke-width":1.4,"vector-effect":"non-scaling-stroke"})}
+function ring(pct){const svg=$("#ring");clear(svg);const r=32,C=2*Math.PI*r;svgEl(svg,"circle",{cx:40,cy:40,r,fill:"none",stroke:"#1b2436","stroke-width":8});
+ const c=svgEl(svg,"circle",{cx:40,cy:40,r,fill:"none",stroke:"#34d399","stroke-width":8,"stroke-linecap":"round","stroke-dasharray":C,"stroke-dashoffset":C,transform:"rotate(-90 40 40)"});
+ c.style.transition="stroke-dashoffset 1.2s cubic-bezier(.2,.8,.2,1)";requestAnimationFrame(()=>requestAnimationFrame(()=>c.setAttribute("stroke-dashoffset",C*(1-pct/100))))}
+function kpis(s){const t=s.totals,tl=s.timeline||[];
+ countTo($("#k1"),t.honeypot_sessions_24h,x=>fmt(Math.round(x)));$("#k1s").textContent=fmt(t.honeypot_sessions_total)+" all time";
+ countTo($("#k2"),t.attackers_24h,x=>fmt(Math.round(x)));$("#k2s").textContent=fmt(t.attackers_total)+" all time";
+ countTo($("#k3"),t.alerts_24h,x=>fmt(Math.round(x)));$("#k3s").textContent=t.critical_24h+" critical · "+t.high_24h+" high";
+ countTo($("#k4"),s.coverage.pct,x=>x.toFixed(1)+"%");$("#k4s").textContent=s.coverage.real+" on real traffic · "+s.coverage.testing+" in my own testing";
+ spark("#sp1",tl.map(x=>x.honeypot),"#a78bfa");spark("#sp3",tl.map(x=>x.other),"#22d3ee");if(!counted)ring(s.coverage.pct);counted=true}
+const SRC_LABEL={auth_log:["auth.log","real server SSH"],auditd:["auditd","kernel audit"],cloudtrail:["CloudTrail","AWS API calls"],cowrie:["Cowrie","SSH honeypot"],falco:["Falco","container runtime"]};
+function flow(s){const f=$("#flow");clear(f);const col=el("div","fcol");
+ (s.pipeline||[]).forEach(r=>{const n=el("div","fn src s-"+r.status),lab=SRC_LABEL[r.source]||[r.source.replace("_"," "),""],t=el("div");
+  t.append(el("b","",lab[0]),el("span","",(lab[1]?lab[1]+" · ":"")+({ok:"last input "+ago(r.last_input),waiting:"waiting for first input",silent:"silent "+r.silent_hours+" h",not_monitored:"not monitored",unknown:"unknown"}[r.status]||r.status)));
+  n.append(el("span","dot "+({ok:"ok",waiting:"warn",silent:"bad"}[r.status]||"")),t);col.append(n)});f.append(col);
+ const nRules=(s.rules||[]).length||18;
+ [["Collect & normalise","every log line is validated into a typed Pydantic schema"],["Detect",nRules+" rules, each mapped to a MITRE ATT&CK technique"],["Store",fmt(s.totals.alerts_total)+" public alerts, with my own activity removed"],["Show","this read-only page, rebuilt every 5 minutes"]]
+  .forEach(([h,p],i)=>{f.append(el("div","fa"));const n=el("div","fn step");n.append(el("small","","STEP 0"+(i+1)),el("b","",h),el("span","",p));f.append(n)})}
+/* Terminal replay: a re-enactment from the real top commands. All text goes through textContent (attacker input). */
+let termOn=false;const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function startTerm(c,users){if(termOn||!c||!c.top||!c.top.length)return;termOn=true;const box=$("#termb"),user=(users&&users[0]&&users[0].value)||"root";
+ const lines=[{c:"sys",t:"Connecting to the honeypot from one of "+fmt(c.sessions_total)+" recorded sessions…"},{c:"",t:"login as: "+user},{c:"",t:user+"@honeypot's password: ••••••••"},{c:"sys",t:"Access granted (it is a decoy, every login is accepted)."}];
+ c.top.slice(0,6).forEach(x=>{lines.push({p:user+"@honeypot:~# ",t:x.value,type:1});lines.push({c:"cm",t:"# typed "+fmt(x.count)+" times"+(x.meaning?" — "+x.meaning:"")})});
+ const add=(cls)=>{const d=el("div",cls);box.append(d);while(box.children.length>16)box.removeChild(box.firstChild);return d};
+ if(REDUCE){lines.forEach(l=>{const d=add(l.c||"");if(l.p)d.append(el("span","pr",l.p));d.append(document.createTextNode(l.t))});return}
+ (async()=>{for(;;){for(const l of lines){const d=add(l.c||"");if(l.p){d.append(el("span","pr",l.p));const tx=document.createTextNode(""),cr=el("span","caret");d.append(tx,cr);
+    await sleep(500);for(const ch of l.t){tx.data+=ch;await sleep(22+Math.random()*40)}await sleep(350);cr.remove()}else{d.textContent=l.t;await sleep(l.c==="cm"?900:600)}}
+   await sleep(4000);clear(box)}})()}
+/* Map: animated paths from the busiest attackers to my server's AWS region. */
+const SERVER=[59.33,18.07];let arcLayer=null;
+function arcPts(a,b){const dl=b[0]-a[0],dn=b[1]-a[1],c=[Math.min(80,(a[0]+b[0])/2+dn*.18),(a[1]+b[1])/2-dl*.18],out=[];
+ for(let i=0;i<=24;i++){const t=i/24,u=1-t;out.push([u*u*a[0]+2*u*t*c[0]+t*t*b[0],u*u*a[1]+2*u*t*c[1]+t*t*b[1]])}return out}
+function drawArcs(){if(!arcLayer)return;arcLayer.clearLayers();if(!$("#arcs").checked)return;
+ const top=[...pins].sort((x,y)=>y.n-x.n).slice(0,30),mx=Math.max(1,...top.map(p=>p.n));
+ top.forEach(p=>L.polyline(arcPts([p.lat,p.lon],SERVER),{className:"arc",interactive:false,color:p.kind==="ssh"?"#f5a524":"#fb4d6a",weight:1+1.6*Math.sqrt(p.n/mx),opacity:.75}).addTo(arcLayer))}
+function serverMarker(){const icon=L.divIcon({className:"srv",html:"<i></i><i></i><b></b>",iconSize:[18,18]});
+ L.marker(SERVER,{icon,keyboard:false}).bindTooltip("My server · AWS eu-north-1 (Stockholm region)").addTo(map)}
+$("#arcs").addEventListener("change",drawArcs);
+/* Section nav highlight + gentle reveal on scroll */
+(()=>{if(!("IntersectionObserver"in window))return;const links=[...document.querySelectorAll("#secnav a")];
+ const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting)links.forEach(a=>a.classList.toggle("on",a.getAttribute("href")==="#"+e.target.id))}),{rootMargin:"-45% 0px -50% 0px"});
+ ["top","s-pipe","s-att","s-tried","s-time","s-det"].forEach(id=>{const n=document.getElementById(id);if(n)io.observe(n)});
+ if(REDUCE)return;const rv=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add("in");rv.unobserve(e.target)}}),{rootMargin:"0px 0px -8% 0px"});
+ document.querySelectorAll("main>.card:not(.hero),main>.sec").forEach(n=>{n.classList.add("rv");rv.observe(n)})})();
 initMap();load();setInterval(load,6e4);
 </script></body></html>
